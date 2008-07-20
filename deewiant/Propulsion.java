@@ -7,6 +7,7 @@ import robocode.util.*;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
+import java.util.Random;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -92,102 +93,203 @@ final public class Propulsion {
 
 	// for melee
 	final private class RiskMinimiser extends Engine {
-		RiskMinimiser() { super("Minimum Risk Movement"); }
+		public RiskMinimiser() {
+			super("Minimum Risk Movement");
+		}
+		private final Point2D[] prevPoints = new Point2D[1];
 
-		private Point2D previous, current, next;
+		private Point2D current, next;
+		private double nextRisk;
 
-		private double
-			mapWidth, mapHeight,
-			botNRG;
+		private double botNRG, mapWidth, mapHeight;
 
 		private void updateBot() {
-			mapWidth  = bot.getBattleFieldWidth();
+			current = new Point2D.Double(bot.getX(), bot.getY());
+			botNRG  = bot.getEnergy();
+			//////// UH OH
+			mapWidth = bot.getBattleFieldWidth();
 			mapHeight = bot.getBattleFieldHeight();
-			current   = new Point2D.Double(bot.getX(), bot.getY());
-			botNRG    = bot.getEnergy();
 		}
 
+		private static final double
+			DIST_FACTOR   = Rules.RADAR_SCAN_RADIUS*Rules.RADAR_SCAN_RADIUS,
+			TINY_DIST     =  25,
+			VSHORT_DIST   =  75,
+			SHORT_DIST    = 100,
+			MIDDLE_DIST   = 150,
+			LONG_DIST     = 250,
+			TINY_DISTSQ   = TINY_DIST*TINY_DIST,
+			VSHORT_DISTSQ = VSHORT_DIST*VSHORT_DIST,
+			SHORT_DISTSQ  = SHORT_DIST*SHORT_DIST,
+			MIDDLE_DISTSQ = MIDDLE_DIST*MIDDLE_DIST,
+			LONG_DISTSQ   = LONG_DIST*LONG_DIST;
+
+		Enemy target;
+
 		public void move(final Enemy target) {
-			if (target == null)
-				return;
+
+			this.target = target;
 
 			updateBot();
 
-			if (previous == null)
-				previous = current;
-			if (next == null)
-				next = previous;
+			if (next != null && current.distanceSq(next) < TINY_DISTSQ && bot.getVelocity() > 0)
+				return;
 
-			boolean newNext = false;
-			final double distance = Math.min(300, current.distance(target) / 2);
+			for (int i = 0; i < prevPoints.length; ++i)
+			if (prevPoints[i] != null)
+				if (current.distanceSq(prevPoints[i]) > LONG_DISTSQ)
+					prevPoints[i] = null;
+
+			if (next == null) {
+				next = current;
+				nextRisk = Double.POSITIVE_INFINITY;
+			// try to move around a lot, don't stay in one place for long
+			} else if (next.distanceSq(current) < TINY_DISTSQ)
+				nextRisk = Double.POSITIVE_INFINITY;
+			else
+				// recalculate, situation may have changed
+				nextRisk = risk(next);
+
+			out.println("STARTING AT " + nextRisk);
+
+			double distance = MIDDLE_DIST;
+			if (target != null)
+				distance = Math.min(distance, 0.8 * current.distance(target));
 
 			for (double angle = 0.0; angle < 2 * Math.PI; angle += 0.1) {
-				final Point2D point = Tools.projectVector(current, angle, distance);
-
-				if (
-					point.getX() < Tools.BOT_WIDTH  || point.getX() > mapWidth  - Tools.BOT_WIDTH ||
-					point.getY() < Tools.BOT_HEIGHT || point.getY() > mapHeight - Tools.BOT_HEIGHT
-				)
-					continue;
-
-				if (risk(point) < risk(next)) {
-					newNext = true;
-					next = point;
-				}
+				final double dist = Math.max(VSHORT_DIST, random.nextDouble()*distance);
+				tryPoint(Tools.projectVector(current, angle, dist), dist);
 			}
-
-			if (newNext)
-				previous = current;
 
 			super.goTo(next);
 		}
 
+		Random random = new Random();
+
+		private void tryPoint(final Point2D point, final double dist) {
+			if (
+				point.getX() < Tools.BOT_WIDTH  || point.getX() > mapWidth  - Tools.BOT_WIDTH ||
+				point.getY() < Tools.BOT_HEIGHT || point.getY() > mapHeight - Tools.BOT_HEIGHT
+			)
+				return;
+
+			final double risk = risk(point, dist);
+
+			out.println("ATTEMPT " + risk);
+			if (risk < nextRisk) {
+				addPrev(current);
+				next = point;
+				nextRisk = risk;
+			}
+		}
+
+		private void addPrev(final Point2D p) {
+			if (prevPoints.length == 1) {
+				prevPoints[0] = p;
+				return;
+			}
+
+			double maxDist = Double.NEGATIVE_INFINITY;
+			int m = prevPoints.length, n = m;
+
+			for (int i = 0; i < prevPoints.length; ++i)
+			if (prevPoints[i] == null)
+				n = i;
+			else {
+				final double dist = prevPoints[i].distanceSq(current);
+				if (dist < TINY_DISTSQ)
+					return;
+				else if (dist > maxDist) {
+					maxDist = dist;
+					m = i;
+				}
+			}
+
+			if (n < prevPoints.length)
+				prevPoints[n] = p;
+			else
+				prevPoints[m] = p;
+		}
+
 		private double risk(final Point2D point) {
-			double fullRisk = /*4.0 / previous.distanceSq(point) + */1.0 / (10 * current.distanceSq(point));
+			return risk(point, current.distanceSq(point));
+		}
+		private double risk(final Point2D point, final double distSq) {
 
-			Line2D lineToPoint = new Line2D.Double(current, point);
+			double fullRisk = 0;
 
-			Rectangle2D enemyArea = new Rectangle2D.Double(
-				0, 0,
-				Tools.BOT_WIDTH * 2,
-				Tools.BOT_HEIGHT * 2
-			);
+			final long timeToPoint = (long)(distSq/Rules.MAX_VELOCITY);
+			final Line2D lineToPoint = new Line2D.Double(current, point);
 
-			for (Enemy dude: dudes) {
-				double risk = Math.max(botNRG, dude.energy) / point.distanceSq(dude);
+			for (final Enemy dude : dudes) {
+	/*			double risk = 0;
 
-				// from HawkOnFire/Kawigi
-				// David Alves's "perpendicularity": 1 if moving right at enemy, 0 if moving perpendicular
-				final double perpendicularity = Math.abs(Math.cos(Tools.atan2(current, point)) - Tools.atan2(dude, point));
+	//			double damageQuotient;
+	//			if (damageTaken > 0)
+	//				damageQuotient = dude.hurtMe / damageTaken;
+	//			else
+	//				damageQuotient = 0;
+	//
+	//			double invAccuracy;
+	//			if (dude.hitCount > 0)
+	//				invAccuracy = (double)dude.shotAtCount / dude.hitCount;
+	//			else
+	//				invAccuracy = 0;
 
-				// we want to know how likely it is that we'll be targeted at point
-				// assume that the enemy targets you if you're 90% closer than everyone else
-				// so, check dude's distance to every other enemy and compare it to its distance to point
-				// if point is closer, that's bad, so increase the risk
-				double targetedLikelihood = 0.0;
-				for (Enemy dude2: dudes)
-					if (dude2 != dude && dude.distance(dude2) * 0.9 > dude.distance(point))
+	//			risk += (1 + invAccuracy) * (1 + linearity(point, dude)) * (1 + damageQuotient) * dude.energy / botNRG;
+	*/
+				final double distanceSq = dude.distanceSq(point);
+
+				// assume that the enemy targets you if you're closer than everyone else
+				int targetedLikelihood = 0;
+				for (final Enemy dude2 : dudes)
+				if (
+					dude2 != dude &&
+					bot.getTime() - dude.lastShootTime <= 360.0/Rules.RADAR_TURN_RATE
+					&& dude.distanceSq(dude2) >= distanceSq
+				)
 						++targetedLikelihood;
 
-				risk *= 1 + targetedLikelihood * perpendicularity;
+				double risk =
+					Math.min(dude.energy / botNRG, 2) *
+					(1 + linearity(point, dude) + targetedLikelihood) *
+					(distanceSq < VSHORT_DISTSQ ? 5 : 1) / distanceSq;
 
-				// if path to point collides with dude, very bad
-				// from Kawigi:
-				// "I'm figuring that if to [sic] 36x36 squares will hit each other moving along a certain vector
-				// (my vector, and I assume they'll be in roughly the same place), then a line representing
-				// the vector will intersect a 72x72 square centered in the same place."
-				// so instead of checking whether a 36x36x(distance-to-bot) rectangle intersects with a 36x36 bot,
-				// check whether a vector intersects with a 72x72 bot
-				enemyArea.setRect(dude.getX() - Tools.BOT_WIDTH, dude.getY() - Tools.BOT_HEIGHT, enemyArea.getWidth(), enemyArea.getHeight());
-				if (lineToPoint.intersects(enemyArea))
-					risk *= 8;
+				Rectangle2D VICINITY = new Rectangle2D.Double(
+					dude.x - Tools.BOT_WIDTH *1.25,
+					dude.y - Tools.BOT_HEIGHT*1.25,
+					Tools.BOT_WIDTH  * 2.5,
+					Tools.BOT_HEIGHT * 2.5);
+				if (lineToPoint.intersects(VICINITY))
+					risk *= 40;
 
 				fullRisk += risk;
 			}
 
+   		if (!((dudes.size() & 1) == 0 && bot.getTime() - lastHit > 8))
+   		for (final Point2D p : prevPoints)
+   		if (p != null)
+   			fullRisk += 5.0 / p.distanceSq(point);
+
+			fullRisk += 100.0 / distSq;
+
 			return fullRisk;
 		}
-	} // end RiskMinimiser
+
+		
+		// David Alves's "perpendicularity":
+		//    1 if, when going to a, we'd move directly towards b
+		//    0 if we'd be moving perpendicular to b
+		// I prefer "linearity", perpendicularity would be the other way around
+		private double linearity(final Point2D a, final Point2D b) {
+			return Math.abs(Math.cos(Tools.atan2(current, a) - Tools.atan2(current, b)));
+		}
+	}
+ // end RiskMinimiser
+		long lastHit = 0;
+		void hitByBullet(final long time) {
+			lastHit = time;
+		}
 
 	// for a disabled or 0.0 energy dude in one-on-one
 	final private class Rammer extends Engine {

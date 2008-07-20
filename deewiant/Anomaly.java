@@ -116,6 +116,10 @@ final public class Anomaly extends AdvancedRobot {
 		);
 	}
 
+	public void onHitByBullet(final HitByBulletEvent e) {
+		propulsion.hitByBullet(getTime());
+	}
+
 	public void onRobotDeath(final RobotDeathEvent e) {
 		final String name = e.getName();
 		if (dudes.containsKey(name))
