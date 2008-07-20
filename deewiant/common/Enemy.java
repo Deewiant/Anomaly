@@ -11,14 +11,14 @@ import java.util.Map;
 public final class Enemy extends Point2D.Double {
 	public String name;
 	public double
-		absBearing,
+		absBearing, // angle from us to enemy, [0,2π)
 		avgApproachVelocity,
-		bearing,
+		bearing,    // angle from us to enemy, [-π,π)
 		deltaHeading,
 		distance,
 		energy,
 		firePower,
-		heading,
+		heading,    // angle enemy is moving in, [0,2π)
 		velocity,
 		hurtMe;
 	public long
@@ -29,6 +29,7 @@ public final class Enemy extends Point2D.Double {
 		shotCount, // guess
 		hitMeCount;
 	public boolean
+		justSeen,
 		old,
 		positionUnknown = true;
 

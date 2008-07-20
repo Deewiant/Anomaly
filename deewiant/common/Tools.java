@@ -19,13 +19,37 @@ public class Tools {
 		return 20 - 3 * power;
 	}
 
+	////// Java specifics
+	public static double toArcAngle(final double ang) {
+		return toDeg(ang) - 90;
+	}
+	public static double fromArcAngle(final double ang) {
+		return toRad(ang + 90);
+	}
+
 	////// general geometry
-	public static Point2D.Double projectVector(final Point2D from, final double angle, final double length) {
-		return new Point2D.Double(from.getX() + Math.sin(angle) * length, from.getY() + Math.cos(angle) * length);
+	public static Point2D.Double projectVector(
+		final Point2D from,
+		final double angle, final double length
+	) {
+		return new Point2D.Double(
+			from.getX() + Math.sin(angle) * length,
+			from.getY() + Math.cos(angle) * length);
 	}
 
 	public static double atan2(final Point2D b, final Point2D a) {
 		return Math.atan2(b.getX() - a.getX(), b.getY() - a.getY());
+	}
+
+	public static double currentAbsBearing(final Point2D a, final Point2D me) {
+		return Utils.normalAbsoluteAngle(atan2(a, me));
+	}
+
+	public static double toDeg(final double ang) {
+		return ang * (180.0 / Math.PI);
+	}
+	public static double toRad(final double ang) {
+		return ang * (Math.PI / 180.0);
 	}
 
 	////// general math

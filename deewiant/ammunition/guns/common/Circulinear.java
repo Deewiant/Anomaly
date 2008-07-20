@@ -31,9 +31,14 @@ public final class Circulinear {
 
 				// assume that enemy stops at wall
 				if (guess.getX() > Global.mapWidth  - 18.0 || guess.getX() < 18.0)
-					guess.setLocation(Tools.between(guess.getX(), 18.0, Global.mapWidth - 18.0), guess.getY());
+					guess.setLocation(
+						Tools.between(guess.getX(), 18.0, Global.mapWidth - 18.0),
+						guess.getY());
+
 				if (guess.getY() > Global.mapHeight - 18.0 || guess.getY() < 18.0)
-					guess.setLocation(guess.getX(), Tools.between(guess.getY(), 18.0, Global.mapHeight - 18.0));
+					guess.setLocation(
+						guess.getX(),
+						Tools.between(guess.getY(), 18.0, Global.mapHeight - 18.0));
 			}
 		}
 

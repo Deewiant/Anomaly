@@ -33,7 +33,9 @@ public final class Ammunition {
 			Global.bot.getTime() - Global.target.scanTime >= 3*Tools.LOCK_ADVANCE
 		) {
 			// spin in the same direction as radar to speed it up
-			Global.bot.setTurnGunRightRadians(Global.bot.getRadarTurnRemainingRadians() * Double.POSITIVE_INFINITY);
+			Global.bot.setTurnGunRightRadians(
+				Global.bot.getRadarTurnRemainingRadians() *
+				Double.POSITIVE_INFINITY);
 			return;
 		}
 

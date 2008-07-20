@@ -94,7 +94,9 @@ public final class Anomaly extends AdvancedRobot {
 		final double heading = e.getHeadingRadians();
 		final long now = super.getTime();
 
-		dude.deltaHeading = Utils.normalRelativeAngle(heading - dude.heading) / (now - dude.scanTime);
+		dude.deltaHeading =
+			Utils.normalRelativeAngle(heading - dude.heading) /
+			(now - dude.scanTime);
 
 		dude.heading  = heading;
 		dude.bearing  = e.getBearingRadians();
@@ -104,11 +106,11 @@ public final class Anomaly extends AdvancedRobot {
 		dude.energy   = e.getEnergy();
 		dude.name     = e.getName();
 
-		dude.absBearing = Utils.normalAbsoluteAngle(super.getHeadingRadians() + dude.bearing);
+		dude.absBearing =
+			Utils.normalAbsoluteAngle(super.getHeadingRadians() + dude.bearing);
 
 		dude.x        = super.getX() + dude.distance * Math.sin(dude.absBearing);
 		dude.y        = super.getY() + dude.distance * Math.cos(dude.absBearing);
-
 
 		double wallDamage = 0;
 		final double prevSpeed = Math.abs(dude.prevVelocity);
@@ -116,7 +118,11 @@ public final class Anomaly extends AdvancedRobot {
 			wallDamage = Math.max(0, prevSpeed / 2 - 1);
 
 		final double deltaEnergy = dude.prevEnergy - dude.energy - wallDamage;
-		dude.firePower = (deltaEnergy >= 0.1 && deltaEnergy <= 3.0 ? deltaEnergy : -1);
+		dude.firePower =
+			deltaEnergy >= 0.1 && deltaEnergy <= 3.0
+				? deltaEnergy
+				: -1;
+
 		if (dude.firePower != -1) {
 			dude.lastShootTime = now;
 			++dude.shotCount;
@@ -144,6 +150,7 @@ public final class Anomaly extends AdvancedRobot {
 			Tools.BOT_HEIGHT * 2.5);
 
 		dude.old = dude.positionUnknown = false;
+		dude.justSeen = true;
 
 		Global.dudes.put(dude.name, dude);
 
@@ -151,16 +158,22 @@ public final class Anomaly extends AdvancedRobot {
 	}
 
 	private void updateDudes() {
-		for (final Enemy dude : Global.dudes.values())
-			if (super.getTime() - dude.scanTime > 10*Tools.LOCK_ADVANCE)
+		for (final Enemy dude : Global.dudes.values()) {
+			final double timediff = super.getTime() - dude.scanTime;
+			if (timediff > 360 / Rules.RADAR_TURN_RATE)
 				dude.old = true;
+			else if (timediff > 1)
+				dude.justSeen = false;
+		}
 	}
 
 	private boolean preferableTarget(final Enemy dude) {
 		return (
 			dude.scanTime - Global.target.scanTime > 2*Tools.LOCK_ADVANCE || (
 				dude.distance < 0.9*Global.target.distance &&
-				!perception.readyToLock())); // don't switch targets if about to shoot
+
+				// don't switch targets if about to shoot
+				!perception.readyToLock()));
 	}
 	private void newTarget(final Enemy dude) {
 		Global.target = dude;
@@ -207,8 +220,11 @@ public final class Anomaly extends AdvancedRobot {
 		dude.hurtMe        += damage;
 		Global.damageTaken += damage;
 
-		if (super.getTime() - dude.scanTime > 360 / Rules.RADAR_TURN_RATE)
-			perception.hiddenDudeAt(e.getHeadingRadians());
+		if (dude.old) {
+			dude.old = false;
+			dude.bearing = e.getBearingRadians();
+			perception.hiddenDudeAt(dude.bearing);
+		}
 	}
 
 	private static int enemyHits = 0;
@@ -226,7 +242,7 @@ public final class Anomaly extends AdvancedRobot {
 	public void onHitWall(final HitWallEvent e) { ++wallHits; }
 
 	private Color getColour(final double energy) {
-		// newValue = (oldValue - oldMinimum) * (newMaximum - newMinimum) / (oldMaximum - oldMinimum) + newMinimum
+		// new = (old - oldMin) * (newMax - newMin) / (oldMax - oldMin) + newMin
 		// hue ranges from 0-360; saturation, luminance are 0-1
 
 		if (energy < 200.1)
@@ -248,10 +264,9 @@ public final class Anomaly extends AdvancedRobot {
 
 		for (final Enemy dude : Global.dudes.values()) {
 
-			if (dude.positionUnknown)
-				continue;
-
 			if (dude.old)
+				g.setColor(Color.GRAY);
+			else if (dude.positionUnknown)
 				g.setColor(Color.ORANGE);
 			else if (dude == Global.target)
 				g.setColor(Color.RED);

@@ -5,9 +5,10 @@ package deewiant.perception;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.geom.Arc2D;
-import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
+import java.util.ArrayList;
+import java.util.Collections;
 
 import robocode.Rules;
 import robocode.util.Utils;
@@ -19,6 +20,8 @@ import deewiant.common.Tools;
 public final class Perception {
 	private static final Rectangle2D[] quadrants = new Rectangle2D.Double[9];
 	private        final double        gunCoolingRate;
+
+	private static final double        EXTRATURN = Math.PI / 16;
 
 	private double
 		radarHeading,
@@ -65,7 +68,7 @@ public final class Perception {
 		gunCoolingRate = Global.bot.getGunCoolingRate();
 
 		final double
-			cornerSize = Math.hypot(4 * Tools.BOT_WIDTH, 4 * Tools.BOT_HEIGHT),
+			cornerSize = Math.hypot(5 * Tools.BOT_WIDTH, 5 * Tools.BOT_HEIGHT),
 			w = Global.mapWidth,
 			h = Global.mapHeight;
 
@@ -96,8 +99,9 @@ public final class Perception {
 		 * |   |         |   |
 		 * O---+---------+---+
 		 *
-		 * it also seems that though the Java Platform doc says it's the upper left
-		 * corner, it's actually the lower left we're passing to the constructor (and it works)
+		 * it also seems that though the Java Platform doc says it's the upper
+		 * left corner, it's actually the lower left we're passing to the
+		 * constructor (and it works)
 		 */
 
 		if (quadrants[0] != null)
@@ -114,14 +118,12 @@ public final class Perception {
 		quadrants[8] = new Rectangle2D.Double(             0,              0,       cornerSize,       cornerSize);
 	}
 
-	public void hiddenDudeAt(final double heading) {
+	// for when we've been shot at from a
+	public void hiddenDudeAt(final double bearing) {
 		if (getQuadrant() != 0) {
 			pleaseFullCircle = true;
-			// spin toward heading as fast as possible
-			clockwise =
-				Utils.normalRelativeAngle(
-					Global.bot.getRadarHeadingRadians() - heading)
-				< 0;
+			// spin toward bearing as fast as possible
+			clockwise = bearing >= 0;
 		}
 	}
 
@@ -129,7 +131,8 @@ public final class Perception {
 		final boolean melee = Global.bot.getOthers() > 1;
 
 		// if just started, spin 360 degrees once
-		if (Global.bot.getTime() < 8) {
+		final long now = Global.bot.getTime();
+		if (now < 8) {
 			Global.bot.setTurnRadarRightRadians(Double.POSITIVE_INFINITY);
 			return;
 		}
@@ -137,26 +140,36 @@ public final class Perception {
 		radarHeading = Global.bot.getRadarHeadingRadians();
 
 		// check for long-lost dudes
-		// no need if the map is so small that we can see from corner to corner
-		if (
-			Global.mapWidth*Global.mapWidth + Global.mapHeight*Global.mapHeight
-			> Rules.RADAR_SCAN_RADIUS*Rules.RADAR_SCAN_RADIUS
-		) {
-			final double diff = Utils.normalRelativeAngle(radarHeading - prevRadarHeading);
+		// copied from RobotPeer
+		final double
+			x = Global.bot.getX(),
+			y = Global.bot.getY();
+		final Point2D me = new Point2D.Double(x, y);
+		{
+			final double prevAngle =
+				Utils.normalAbsoluteAngle(prevRadarHeading - Math.PI/2);
+			final double diff =
+				Utils.normalRelativeAngle(radarHeading - prevRadarHeading);
 
-			// copied from RobotPeer
 			arc.setArc(
 				Global.bot.getX() - Rules.RADAR_SCAN_RADIUS,
 				Global.bot.getY() - Rules.RADAR_SCAN_RADIUS,
 				2 * Rules.RADAR_SCAN_RADIUS,
 				2 * Rules.RADAR_SCAN_RADIUS,
-				prevRadarHeading * (180.0 / Math.PI),
-				diff             * (180.0 / Math.PI),
+				prevAngle * (180.0 / Math.PI),
+				diff      * (180.0 / Math.PI),
 				Arc2D.PIE);
 
 			for (final Enemy dude : Global.dudes.values())
-				if (dude.old && !dude.positionUnknown && arc.intersects(dude.boundingBox))
-					dude.positionUnknown = true;
+			if (
+				!dude.positionUnknown &&
+				(
+					(!dude.justSeen && arc.intersects(dude.boundingBox)) ||
+					(me.distanceSq(dude) >
+						Rules.RADAR_SCAN_RADIUS*Rules.RADAR_SCAN_RADIUS)
+				)
+			)
+				dude.positionUnknown = true;
 		}
 
 		prevRadarHeading = radarHeading;
@@ -167,7 +180,8 @@ public final class Perception {
 				// in melee, lock only if we're about to shoot
 				if (readyToLock() && Global.bot.getEnergy() >= 0.2) {
 
-					final long seenDelta = Global.bot.getTime() - Global.target.scanTime;
+					final long seenDelta =
+						now - Global.target.scanTime;
 
 					if (seenDelta >= 2*Tools.LOCK_ADVANCE) {
 						if (Global.target.distance < Rules.RADAR_SCAN_RADIUS/2) {
@@ -180,7 +194,7 @@ public final class Perception {
 								// been correcting for too long
 								// (this has never happened in testing
 								//  and is only a safety measure)
-								Global.bot.setTurnRadarRightRadians(clockwise ? Double.POSITIVE_INFINITY : Double.NEGATIVE_INFINITY);
+								fullCircle();
 
 							else {
 								// lock to last known pos, turn a bit extra
@@ -196,7 +210,9 @@ public final class Perception {
 					}
 				}
 			// one-on-one, lock if recently seen
-			} else if (Global.bot.getTime() - Global.target.scanTime < 5*Tools.LOCK_ADVANCE) {
+			} else if (
+				!melee && now - Global.target.scanTime < 5*Tools.LOCK_ADVANCE
+			) {
 				lock(Global.target.absBearing);
 				return;
 			}
@@ -215,41 +231,163 @@ public final class Perception {
 			}
 		}
 
+		// if this isn't true, we certainly can't see all!
+		boolean canSeeAll = Global.dudes.size() == Global.bot.getOthers();
+		// ClockWise, CounterClockWise
+		double
+			nextCW  = Double.POSITIVE_INFINITY,
+			nextCCW = Double.NEGATIVE_INFINITY;
+
+		// to find the minimal arc which covers all dudes, we:
+		// sort the list of absBearings
+		// consider all two consecutive pairs, including (last,first)
+		// find the one with the maximum angle (second - first)
+		// that is the maximum arc which covers no dudes
+		// so if we invert it, we get the minimum arc which covers them all.
+		final ArrayList<Double> absBearings =
+			new ArrayList<Double>(Global.dudes.size()+1);
+
+		for (final Enemy dude : Global.dudes.values())
+		if (dude.positionUnknown)
+			canSeeAll = false;
+		else {
+			final double absBearing = Tools.currentAbsBearing(dude, me);
+
+			absBearings.add(absBearing);
+
+			final double dist =
+				Utils.normalAbsoluteAngle(absBearing - radarHeading);
+
+			if (dist < nextCW)
+				nextCW = dist;
+			if (dist > nextCCW)
+				nextCCW = dist;
+		}
+		nextCCW -= Math.PI*2;
+
+		if (absBearings.size() > 1) {
+			Collections.sort(absBearings);
+
+			// easier than handling the edge case manually
+			absBearings.add(absBearings.get(0));
+
+			double maxExtent = Double.NEGATIVE_INFINITY;
+			int maxStart = 0;
+			for (int i = 0; i < absBearings.size() - 1; ++i) {
+				final double diff =
+					Utils.normalAbsoluteAngle(
+						absBearings.get(i+1) - absBearings.get(i));
+
+				if (diff > maxExtent) {
+					maxExtent = diff;
+					maxStart = i+1;
+				}
+			}
+
+			arc.setAngleStart (Tools.toArcAngle(absBearings.get(maxStart)));
+			arc.setAngleExtent(360-Tools.toDeg(maxExtent));
+
+			if (PAINT_ENEMY_ARC) {
+				Graphics2D g = Global.bot.getGraphics();
+				g.setColor(Color.CYAN);
+				g.draw(arc);
+			}
+		} else
+			arc.setAngleExtent(0);
+
+		// continue turning in the same direction, flip directions if distance to
+		// next guy is > half a circle
+
+		boolean twixtEnemiesCW = clockwise;
+		if (
+			( clockwise && nextCW  >  Math.PI) ||
+			(!clockwise && nextCCW < -Math.PI)
+		)
+			twixtEnemiesCW ^= true;
+
+		// TODO: if next dude is not edgemost, or arc extent > 180, spin as much
+		// as possible, not only next*, in that direction
+		// i.e. spin to the last* not next*
+		final double twixtEnemiesTurn =
+			twixtEnemiesCW ? nextCW : nextCCW;
+
+		// if all enemies were visible, just turn among them
+		if (canSeeAll) {
+			doExactScan(twixtEnemiesTurn, twixtEnemiesCW);
+			return;
+		}
+
 		/*
 		 * if in a corner, scan only the  90 degree arc away from the corner
 		 * if in an edge,  scan only the 180 degree arc away from the edge
 		 * if in the middle, 360 degrees
 		 */
 
-		final double
-			x = Global.bot.getX(),
-			y = Global.bot.getY();
-		final Point2D me = new Point2D.Double(x, y);
-
-		for (final Enemy dude : Global.dudes.values())
-		if (!dude.old && dude.distanceSq(me) < 150*150) {
-			fullCircle();
-			return;
-		}
-
 		final int q = getQuadrant(x, y);
 		if (q == 0)
 			fullCircle();
-		else
-			scanArc(arcCentres[q-1], arcExtents[q-1]);
+		else {
+			final double
+				arcCentre = arcCentres[q-1],
+				arcExtent = arcExtents[q-1];
+
+			// use the greater of this angle and the twixt-enemies angle
+			if (arcExtent > Tools.toRad(arc.getAngleExtent())) {
+				final double
+					edge1 = Utils.normalAbsoluteAngle(arcCentre - arcExtent / 2);
+
+				// Having actually read the documentation this time, I wonder how
+				// exactly scanArc() works without using Tools.*ArcAngle at all.
+
+				arc.setAngleStart (Tools.toArcAngle(edge1 -  EXTRATURN));
+				arc.setAngleExtent(Tools.toDeg(arcExtent + 2*EXTRATURN));
+
+				if (PAINT_EDGE_ARCS) {
+					Graphics2D g = Global.bot.getGraphics();
+					g.setColor(Color.MAGENTA);
+					g.draw(arc);
+				}
+
+				if (possibleSlippage(arc)) {
+					fullCircle();
+					return;
+				}
+
+				final double
+					edge2 = Utils.normalAbsoluteAngle(arcCentre + arcExtent / 2);
+
+				scanArc(arcCentre, arcExtent, edge1, edge2);
+			} else {
+				if (possibleSlippage(arc)) {
+					fullCircle();
+					return;
+				}
+
+				doExactScan(twixtEnemiesTurn, twixtEnemiesCW);
+			}
+		}
 	}
 
 	public void victoryDance() {
-		Global.bot.setTurnRadarRightRadians(clockwise ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY);
+		Global.bot.setTurnRadarRightRadians(
+			clockwise
+				? Double.NEGATIVE_INFINITY
+				: Double.POSITIVE_INFINITY);
 	}
 
 	public boolean readyToLock() {
 		return Global.bot.getGunHeat() / gunCoolingRate < Tools.LOCK_ADVANCE;
 	}
 
+	//
+	// privates only (and painting)
+	//
+
 	private void fullCircle() {
-		Global.bot.setTurnRadarRightRadians(clockwise ? Double.POSITIVE_INFINITY : Double.NEGATIVE_INFINITY);
-		nextEdge = Double.NaN;
+		Global.bot.setTurnRadarRightRadians(
+			clockwise
+				? Double.POSITIVE_INFINITY
+				: Double.NEGATIVE_INFINITY);
 		wasOutsideArc = false;
 	}
 
@@ -257,12 +395,35 @@ public final class Perception {
 		lock(th, Rules.RADAR_TURN_RATE_RADIANS / 2);
 	}
 	private void lock(final double targetHeading, final double offset) {
-		final double toEnemyCentre = Utils.normalRelativeAngle(targetHeading - radarHeading);
+		final double toEnemyCentre =
+			Utils.normalRelativeAngle(targetHeading - radarHeading);
 
 		clockwise = toEnemyCentre > 0;
 
-		Global.bot.setTurnRadarRightRadians(toEnemyCentre + (clockwise ? offset : -offset));
+		Global.bot.setTurnRadarRightRadians(
+			toEnemyCentre +
+			(clockwise ? offset : -offset));
+
 		wasOutsideArc = false;
+	}
+
+	private boolean possibleSlippage(final Arc2D arc) {
+		final long now = Global.bot.getTime();
+
+		final Point2D me =
+			new Point2D.Double(Global.bot.getX(), Global.bot.getY());
+
+		for (final Enemy dude : Global.dudes.values())
+		if (!dude.old) {
+			final Point2D pos = dude.guessPosition(now);
+
+			final double absBearing = Tools.currentAbsBearing(pos, me);
+
+			if (!arc.containsAngle(Tools.toArcAngle(absBearing))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private int getQuadrant() {
@@ -278,15 +439,18 @@ public final class Perception {
 		return q;
 	}
 
-	private double nextEdge;
+	private void scanArc(
+		final double arcCentre, final double arcExtent,
+		final double edge1, final double edge2
+	) {
+		arc.setAngleStart (edge1     * (180.0 / Math.PI));
+		arc.setAngleExtent(arcExtent * (180.0 / Math.PI));
 
-	private void scanArc(final double arcCentre, final double arc) {
-		final double edge1 = Utils.normalAbsoluteAngle(arcCentre - arc / 2);
-		final double edge2 = Utils.normalAbsoluteAngle(arcCentre + arc / 2);
+		final boolean outsideArc =
+			!this.arc.containsAngle(radarHeading * 180.0 / Math.PI);
 
-		this.arc.setAngleStart (edge1 * 180.0 / Math.PI);
-		this.arc.setAngleExtent(  arc * 180.0 / Math.PI);
-		final boolean outsideArc = !this.arc.containsAngle(radarHeading * 180.0 / Math.PI);
+		boolean toNext = false;
+		double nextEdge = Double.NaN;
 
 		if (outsideArc) {
 			if (wasOutsideArc) {
@@ -297,7 +461,7 @@ public final class Perception {
 					return;
 
 				nextEdge = getNextEdge(arcCentre, edge1, edge2);
-				doScan(nextEdge);
+				toNext = true;
 
 				leavingArc = true;
 
@@ -307,10 +471,10 @@ public final class Perception {
 
 				if (clockwise) {
 					clockwise = false;
-					doExactScan(-arc);
+					doExactScan(-arcExtent);
 				} else {
 					clockwise = true;
-					doExactScan(arc);
+					doExactScan( arcExtent);
 				}
 
 				leavingArc = false;
@@ -320,42 +484,52 @@ public final class Perception {
 			// go to the next edge
 
 			nextEdge = getNextEdge(radarHeading, edge1, edge2);
-			doScan(nextEdge);
+			toNext = true;
 
 			leavingArc = false;
+		}
+
+		if (toNext) {
+			final double turn =
+				Utils.normalRelativeAngle(nextEdge - radarHeading);
+			clockwise = turn > 0;
+			doExactScan(turn);
 		}
 
 		wasOutsideArc = outsideArc;
 	}
 
-	private void doScan(final double edge) {
-		final double radarTurn = Utils.normalRelativeAngle(edge - radarHeading);
-		clockwise  = radarTurn > 0;
-
-		doExactScan(radarTurn);
+	private void doExactScan(final double turn) {
+		// Add a bit of extra to the turn to account for bot movement, if
+		// scanning at a bot, or for scanning the whole quadrant, not just to the
+		// middle, if scanning a quadrant.
+		Global.bot.setTurnRadarRightRadians(
+			turn + Math.signum(turn) * EXTRATURN);
+	}
+	private void doExactScan(final double turn, final boolean cw) {
+		clockwise = cw;
+		doExactScan(turn);
 	}
 
-	private void doExactScan(final double radarTurn) {
-		// add a bit of extra to the turn so we scan the whole width of the
-		// quadrant, not just to the middle
-		Global.bot.setTurnRadarRightRadians(radarTurn + Math.signum(radarTurn) * (Math.PI / 16));
+	private double getNextEdge(
+		final double whence,
+		final double edge1, final double edge2
+	) {
+		final double
+			dist1 = Utils.normalRelativeAngle(edge1 - whence),
+			dist2 = Utils.normalRelativeAngle(edge2 - whence);
+		return
+			clockwise
+				? (dist1 >= dist2 ? edge1 : edge2)
+				: (dist1 <= dist2 ? edge1 : edge2);
 	}
 
-	private double getNextEdge(final double whence, final double edge1, final double edge2) {
-		return (clockwise ? (
-				(Utils.normalRelativeAngle(edge1 - whence) >= Utils.normalRelativeAngle(edge2 - whence))
-					? edge1 : edge2
-			) : (
-				(Utils.normalRelativeAngle(edge1 - whence) <= Utils.normalRelativeAngle(edge2 - whence))
-					? edge1 : edge2
-			)
-		);
-	}
-
+	//
 	// Only painting stuff henceforth
+	//
 
 	public void onPaint(final Graphics2D g) {
-		if (!PAINT_QUADRANTS && !PAINT_ARCS)
+		if (!PAINT_QUADRANTS)
 			return;
 
 		int q = 0, tq = 0;
@@ -373,44 +547,10 @@ public final class Perception {
 			else if (q == 5)
 				g.setColor(Color.RED);
 		}
-
-		if (PAINT_ARCS) switch (tq) {
-			case 1: paintArc(g,     Math.PI,      Math.PI); break;
-			case 2: paintArc(g, 3 * Math.PI / 2,  Math.PI); break;
-			case 3: paintArc(g,               0, -Math.PI); break;
-			case 4: paintArc(g,     Math.PI / 2, -Math.PI); break;
-
-			case 5: paintArc(g, 3 * Math.PI / 4,  Math.PI / 2); break;
-			case 6: paintArc(g, 5 * Math.PI / 4,  Math.PI / 2); break;
-			case 7: paintArc(g, 7 * Math.PI / 4,  Math.PI / 2); break;
-			case 8: paintArc(g,     Math.PI / 4,  Math.PI / 2); break;
-
-			default: break;
-		}
-	}
-
-	private void paintArc(final Graphics2D g, final double arcCentre, double arc) {
-		final double radarPos = Global.bot.getRadarHeadingRadians();
-
-		final double edge1 = Utils.normalAbsoluteAngle(arcCentre - arc / 2);
-		final double edge2 = Utils.normalAbsoluteAngle(arcCentre + arc / 2);
-
-		final Point2D p = new Point2D.Double(Global.bot.getX(), Global.bot.getY());
-
-		final Line2D
-			centreLine = new Line2D.Double(p, Tools.projectVector(p, arcCentre, Rules.RADAR_SCAN_RADIUS)),
-		   edge1Line = new Line2D.Double(p, Tools.projectVector(p, edge1, Rules.RADAR_SCAN_RADIUS)),
-		   edge2Line = new Line2D.Double(p, Tools.projectVector(p, edge2, Rules.RADAR_SCAN_RADIUS));
-
-		g.setColor(Color.YELLOW);
-		g.draw(edge1Line);
-		g.draw(edge2Line);
-
-		g.setColor(Color.GREEN);
-		g.draw(centreLine);
 	}
 
 	private static final boolean
 		PAINT_QUADRANTS = false,
-		PAINT_ARCS      = false;
+		PAINT_EDGE_ARCS = false,
+		PAINT_ENEMY_ARC = true;
 }
