@@ -1,0 +1,40 @@
+<project default="compile">
+	<property name="targetdir" value="../../robots"/>
+	<property name="classdir" value="${targetdir}/deewiant"/>
+
+	<target name="compile">
+		<javac
+			srcdir="./"
+			destdir="${targetdir}"
+			source="1.6" target="1.6"
+			classpath="../../libs/robocode.jar;."
+			encoding="UTF-8"
+			debug="on">
+
+			<include name="deewiant/**/*.java"/>
+			<compilerarg compiler="modern" value="-Xlint:all,-serial"/>
+		</javac>
+		<copy file="Anomaly.properties" todir="${classdir}"/>
+	</target>
+	<target name="clean">
+		<delete>
+			<fileset dir="${classdir}" includes="**/*.class"/>
+		</delete>
+	</target>
+	<target name="package-ready">
+		<copy todir="${classdir}">
+			<fileset dir="deewiant" includes="**/*.java"/>
+		</copy>
+	</target>
+	<target name="package-done">
+		<delete>
+			<fileset dir="${classdir}" includes="**/*.java"/>
+		</delete>
+	</target>
+	<target name="codesize">
+		<java jar="../../libs/codesize.jar">
+			<arg value="-v"/>
+			<arg value="${classdir}"/>
+		</java>
+	</target>
+</project>

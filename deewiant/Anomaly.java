@@ -1,42 +1,69 @@
+// File created: prior to 2005-10-02
+
 package deewiant;
-import robocode.*;
-import robocode.util.*;
+
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.geom.AffineTransform;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
-final public class Anomaly extends AdvancedRobot {
-	private static final Color c = new Color(0x30, 0, 0200);
+import robocode.AdvancedRobot;
+import robocode.BulletHitEvent;
+import robocode.DeathEvent;
+import robocode.HitByBulletEvent;
+import robocode.HitRobotEvent;
+import robocode.HitWallEvent;
+import robocode.RobotDeathEvent;
+import robocode.Rules;
+import robocode.ScannedRobotEvent;
+import robocode.WinEvent;
+import robocode.util.Utils;
 
-	private              Map        <String, Enemy> dudes;
-	private              Bombardier                 bombardier;
-	private              Propulsion                 propulsion;
-	private              Perception                 perception;
+import deewiant.ammunition.Ammunition;
+import deewiant.propulsion.Propulsion;
+import deewiant.perception.Perception;
+import deewiant.common.Enemy;
+import deewiant.common.Global;
+import deewiant.common.Tools;
 
-	private              String target;
+public final class Anomaly extends AdvancedRobot {
+	private static final Color
+		body   = new Color(010, 045, 103),
+		turret = new Color(0x30, 0, 0200),
+		radar  = null;
 
-	private              boolean won;
+	private Ammunition ammunition;
+	private Propulsion propulsion;
+	private Perception perception;
+
+	private boolean won = false;
 
 	public void run() {
-		super.setColors(c, c, null);
+		super.setColors(body, turret, radar);
 		super.setAdjustGunForRobotTurn(true);
 		super.setAdjustRadarForGunTurn(true);
 		super.setAdjustRadarForRobotTurn(true);
-		won = false;
 
-		dudes      = new HashMap<String, Enemy>(    );
-		bombardier = new Bombardier            (this);
-		propulsion = new Propulsion            (this);
-		perception = new Perception            (this);
+		Global.dudes = new HashMap<String, Enemy>(super.getOthers(), 1);
+		Global.bot   = this;
+		Global.out   = this.out;
+		Global.mapWidth  = super.getBattleFieldWidth ();
+		Global.mapHeight = super.getBattleFieldHeight();
+
+		ammunition = new Ammunition();
+		propulsion = new Propulsion();
+		perception = new Perception();
 
 		while (!won) {
 			super.setScanColor(getColour(super.getEnergy()));
 
-			final Enemy target = dudes.get(this.target);
-			perception.perceive(target);
-			bombardier.bombard (target);
-			propulsion.propel  (target);
+			updateDudes();
+
+			perception.perceive();
+			ammunition.munition();
+			propulsion.propulse();
 			execute();
 		}
 	}
@@ -49,23 +76,23 @@ final public class Anomaly extends AdvancedRobot {
 		gameOver();
 		propulsion.victoryDance();
 		perception.victoryDance();
-		bombardier.victoryDance(perception.clockwise);
+		ammunition.victoryDance();
 	}
 	private void gameOver() {
-		bombardier.spewTheStats();
+		newTarget(null);
+		ammunition.spewTheStats();
 		if (wallHits > 0)
-			out.println(wallHits + " wall hits");
-		clearAllEvents(); // to avoid printing twice if we win and then die
+			Global.out.println(wallHits + " wall hits");
+		if (enemyHits > 0)
+			Global.out.println(enemyHits + " rams");
+		super.clearAllEvents(); // to avoid printing twice if we win and then die
 	}
 
 	public void onScannedRobot(final ScannedRobotEvent e) {
-		final Enemy oldDude = dudes.get(e.getName());
-		final Enemy    dude = (oldDude == null) ? new Enemy() : oldDude;
+		final Enemy dude = getDude(e.getName());
 
 		final double heading = e.getHeadingRadians();
 		final long now = super.getTime();
-
-		dude.newInfo();
 
 		dude.deltaHeading = Utils.normalRelativeAngle(heading - dude.heading) / (now - dude.scanTime);
 
@@ -77,10 +104,11 @@ final public class Anomaly extends AdvancedRobot {
 		dude.energy   = e.getEnergy();
 		dude.name     = e.getName();
 
-		final double absoluteBearing = Utils.normalAbsoluteAngle(super.getHeadingRadians() + dude.bearing);
+		dude.absBearing = Utils.normalAbsoluteAngle(super.getHeadingRadians() + dude.bearing);
 
-		dude.x        = super.getX() + dude.distance * Math.sin(absoluteBearing);
-		dude.y        = super.getY() + dude.distance * Math.cos(absoluteBearing);
+		dude.x        = super.getX() + dude.distance * Math.sin(dude.absBearing);
+		dude.y        = super.getY() + dude.distance * Math.cos(dude.absBearing);
+
 
 		double wallDamage = 0;
 		final double prevSpeed = Math.abs(dude.prevVelocity);
@@ -89,52 +117,115 @@ final public class Anomaly extends AdvancedRobot {
 
 		final double deltaEnergy = dude.prevEnergy - dude.energy - wallDamage;
 		dude.firePower = (deltaEnergy >= 0.1 && deltaEnergy <= 3.0 ? deltaEnergy : -1);
-		if (dude.firePower != -1)
+		if (dude.firePower != -1) {
 			dude.lastShootTime = now;
+			++dude.shotCount;
+		}
 
-		if (target == null || preferableTarget(dude))
-			target = dude.name;
+		if (Global.target == null || preferableTarget(dude))
+			newTarget(dude);
 
-		dudes.put(dude.name, dude);
+		dude.boundingBox.setRect(
+			dude.x - Tools.BOT_WIDTH /2,
+			dude.y - Tools.BOT_HEIGHT/2,
+			Tools.BOT_WIDTH,
+			Tools.BOT_HEIGHT);
 
-		updateDudes();
+		dude.boundingBox =
+			AffineTransform
+			.getRotateInstance(dude.heading, dude.getX(), dude.getY())
+			.createTransformedShape(dude.boundingBox)
+			.getBounds2D();
+
+		dude.vicinity.setRect(
+			dude.x - Tools.BOT_WIDTH *1.25,
+			dude.y - Tools.BOT_HEIGHT*1.25,
+			Tools.BOT_WIDTH  * 2.5,
+			Tools.BOT_HEIGHT * 2.5);
+
+		dude.old = dude.positionUnknown = false;
+
+		Global.dudes.put(dude.name, dude);
 
 		propulsion.onScannedRobot(dude);
 	}
 
 	private void updateDudes() {
-		propulsion.updateDudes(dudes.values());
+		for (final Enemy dude : Global.dudes.values())
+			if (super.getTime() - dude.scanTime > 10*Tools.LOCK_ADVANCE)
+				dude.old = true;
 	}
 
 	private boolean preferableTarget(final Enemy dude) {
-		final Enemy target = dudes.get(this.target);
 		return (
-			dude.scanTime - target.scanTime >= 100 || (
-				!perception.readyToLock() && // don't switch targets if we're about to lock (i.e. shoot)
-				target.distance * 0.9 > dude.distance
-			)
-		);
+			dude.scanTime - Global.target.scanTime > 2*Tools.LOCK_ADVANCE || (
+				dude.distance < 0.9*Global.target.distance &&
+				!perception.readyToLock())); // don't switch targets if about to shoot
+	}
+	private void newTarget(final Enemy dude) {
+		Global.target = dude;
 	}
 
-	public void onHitByBullet(final HitByBulletEvent e) {
-		propulsion.hitByBullet(getTime());
+	private Enemy getDude(final String name) {
+		final Enemy oldDude = Global.dudes.get(name);
+
+		Enemy dude;
+		if (oldDude == null)
+			dude = new Enemy();
+		else {
+			dude = oldDude;
+			dude.newInfo();
+		}
+
+		return dude;
 	}
 
 	public void onRobotDeath(final RobotDeathEvent e) {
-		final String name = e.getName();
-		if (dudes.containsKey(name))
-			dudes.remove(name);
-		if (name.equals(target))
-			target = null;
-
-		updateDudes();
+		if (Global.dudes.remove(e.getName()) == Global.target)
+			newTarget(null);
 	}
 
-	private static long wallHits = 0;
-	public void onBulletHit(final BulletHitEvent e) { bombardier.onBulletHit(e); }
-	public void onHitWall  (final HitWallEvent e)   { ++wallHits; }
+	public void onBulletHit(final BulletHitEvent e) {
+		ammunition.onBulletHit(e.getBullet());
 
-	private Color getColour(double energy) {
+		final Enemy dude = getDude(e.getName());
+
+		dude.energy = e.getEnergy();
+		++dude.hitCount;
+	}
+
+	public void onHitByBullet(final HitByBulletEvent e) {
+		final Enemy dude = getDude(e.getName());
+
+		++dude.hitMeCount;
+
+		final double power = e.getPower();
+		double damage = 4 * power;
+		if (power > 1)
+			damage += 2 * (power-1);
+
+		dude.hurtMe        += damage;
+		Global.damageTaken += damage;
+
+		if (super.getTime() - dude.scanTime > 360 / Rules.RADAR_TURN_RATE)
+			perception.hiddenDudeAt(e.getHeadingRadians());
+	}
+
+	private static int enemyHits = 0;
+	public void onHitRobot(final HitRobotEvent e) {
+		final Enemy dude = getDude(e.getName());
+
+		if (e.isMyFault())
+			++enemyHits;
+
+		dude.bearing = e.getBearingRadians();
+		dude.energy  = e.getEnergy();
+	}
+
+	private static int wallHits = 0;
+	public void onHitWall(final HitWallEvent e) { ++wallHits; }
+
+	private Color getColour(final double energy) {
 		// newValue = (oldValue - oldMinimum) * (newMaximum - newMinimum) / (oldMaximum - oldMinimum) + newMinimum
 		// hue ranges from 0-360; saturation, luminance are 0-1
 
@@ -148,7 +239,32 @@ final public class Anomaly extends AdvancedRobot {
 			return Color.WHITE;
 	}
 
-	public void onPaint(Graphics2D g) {
+	public void onPaint(final Graphics2D g) {
 		if (perception != null) perception.onPaint(g);
+		if (propulsion != null) propulsion.onPaint(g);
+
+		if (!PAINT_ENEMIES)
+			return;
+
+		for (final Enemy dude : Global.dudes.values()) {
+
+			if (dude.positionUnknown)
+				continue;
+
+			if (dude.old)
+				g.setColor(Color.ORANGE);
+			else if (dude == Global.target)
+				g.setColor(Color.RED);
+			else
+				g.setColor(Color.WHITE);
+
+			g.draw(dude.boundingBox);
+
+			g.setColor(Color.GRAY);
+			g.draw(dude.vicinity);
+		}
 	}
+
+	private static final boolean
+		PAINT_ENEMIES = true;
 }

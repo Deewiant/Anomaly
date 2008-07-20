@@ -1,43 +1,50 @@
 // File created: prior to 2005-11-30
 
-package deewiant;
+package deewiant.common;
 
-import robocode.util.*;
+import robocode.util.Utils;
+
 import java.awt.Color;
 import java.awt.geom.Point2D;
 
 public class Tools {
-	////// RoboCode specifics
-	final static double BOT_WIDTH  = 36;
-	final static double BOT_HEIGHT = BOT_WIDTH;
+	////// Anomaly specifics
+	public final static int LOCK_ADVANCE = 5;
 
-	static double bulletSpeed(final double power) {
+	////// RoboCode specifics
+	public final static double BOT_WIDTH  = 36;
+	public final static double BOT_HEIGHT = BOT_WIDTH;
+
+	public static double bulletSpeed(final double power) {
 		return 20 - 3 * power;
 	}
 
 	////// general geometry
-	static Point2D.Double projectVector(final Point2D from, final double angle, final double length) {
+	public static Point2D.Double projectVector(final Point2D from, final double angle, final double length) {
 		return new Point2D.Double(from.getX() + Math.sin(angle) * length, from.getY() + Math.cos(angle) * length);
 	}
 
-	static double atan2(final Point2D b, final Point2D a) {
+	public static double atan2(final Point2D b, final Point2D a) {
 		return Math.atan2(b.getX() - a.getX(), b.getY() - a.getY());
 	}
 
 	////// general math
 	// if var < min, var = min; if var > max, var = max
-	static double between(final double var, final double min, final double max) {
+	public static double between(final double var, final double min, final double max) {
 		return Math.max(min, Math.min(var, max));
 	}
-	static float between(final float var, final float min, final float max) {
+	public static float between(final float var, final float min, final float max) {
 		return Math.max(min, Math.min(var, max));
 	}
-	static boolean near(final double a, final double b) {
-		return Math.abs(a - b) < .1;
+	public static boolean near(final double a, final double b) {
+		return zero(a - b);
+	}
+	public static boolean zero(final double a) {
+		return Math.abs(a) < .1;
 	}
 
 	////// colours
-	static Color HSLtoRGB(final float h, final float s, final float l) {
+	public static Color HSLtoRGB(final float h, final float s, final float l) {
 		if (s == 0)
 			return new Color(l, l, l);
 		else {
@@ -61,7 +68,7 @@ public class Tools {
 		}
 	}
 
-	static private float finalizeColourComponent(final float c, final float p, final float q) {
+	private static float finalizeColourComponent(final float c, final float p, final float q) {
 		if (c < 1f/6)
 			return p + 6*c*(q-p);
 		else if (c < 0.5f)
@@ -72,7 +79,7 @@ public class Tools {
 			return p;
 	}
 
-	static private float normalizeColourComponent(final float c) {
+	private static float normalizeColourComponent(final float c) {
 		if (c < 0)
 			return c + 1;
 		else if (c > 1)
