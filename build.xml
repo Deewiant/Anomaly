@@ -32,7 +32,7 @@
 		</delete>
 	</target>
 	<target name="codesize">
-		<java jar="../../libs/codesize.jar">
+		<java jar="../../libs/codesize.jar" fork="true">
 			<arg value="-v"/>
 			<arg value="${classdir}"/>
 		</java>
