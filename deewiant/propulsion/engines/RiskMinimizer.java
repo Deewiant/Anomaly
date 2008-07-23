@@ -158,6 +158,8 @@ public final class RiskMinimizer extends Engine {
 
 		final Line2D lineToPoint = new Line2D.Double(current, point);
 
+		final long expectedTime = (long)(Math.sqrt(distSq)/Rules.MAX_VELOCITY);
+
 		for (final Enemy dude : Global.dudes.values()) {
 			if (dude.positionUnknown)
 				continue;
@@ -178,21 +180,22 @@ public final class RiskMinimizer extends Engine {
 
 //			risk += (1 + invAccuracy) * (1 + linearity(point, dude)) * (1 + damageQuotient) * dude.energy / botNRG;
 */
-			final double distanceSq = dude.distanceSq(point);
+			final double dudeDistSq = dude.distanceSq(point);
 
 			// we want to know how likely it is that we'll be targeted at point
-			// assume that the enemy targets you if you're 90% closer than everyone else
-			// so, check dude's distance to every other enemy and compare it to its distance to point
-			// if point is closer, that's bad, so increase the risk
+			// assume that the enemy targets you if you're 90% closer than
+			// everyone else so, check dude's distance to every other enemy and
+			// compare it to its distance to point if point is closer, that's bad,
+			// so increase the risk
 			int targetedLikelihood = 0, count = 0;
 			for (final Enemy dude2 : Global.dudes.values())
 			if (
 				dude2 != dude &&
 				!dude2.positionUnknown &&
-				Global.bot.getTime() - dude.lastShootTime <= 360.0/Rules.RADAR_TURN_RATE
+				dude2.energy > 0.1
 			) {
 				++count;
-				if (dude.distanceSq(dude2) * 0.81 > distanceSq)
+				if (dude.distanceSq(dude2) * 0.81 > dudeDistSq)
 					++targetedLikelihood;
 			}
 
@@ -204,10 +207,10 @@ public final class RiskMinimizer extends Engine {
 
 			double risk =
 				Math.min(dude.energy / botNRG, 1) *
-				(1 + linearity(point, dude.guessPosition((long)(distSq/Rules.MAX_VELOCITY)))) *
-				(1 + linearity(point, dude)) *
+				(1 + 0.5*linearity(point, dude.guessPosition(expectedTime))) *
+				(1 +     linearity(point, dude)) *
 				(1 + targetProb) *
-				DIST_FACTOR / distanceSq;
+				DIST_FACTOR / dudeDistSq;
 
 			if (lineToPoint.intersects(dude.vicinity))
 				risk *= 20;
