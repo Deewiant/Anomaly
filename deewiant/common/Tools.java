@@ -15,10 +15,6 @@ public class Tools {
 	public final static double BOT_WIDTH  = 36;
 	public final static double BOT_HEIGHT = BOT_WIDTH;
 
-	public static double bulletSpeed(final double power) {
-		return 20 - 3 * power;
-	}
-
 	////// Java specifics
 	public static double toArcAngle(final double ang) {
 		return toDeg(ang) - 90;
@@ -54,10 +50,14 @@ public class Tools {
 
 	////// general math
 	// if var < min, var = min; if var > max, var = max
-	public static double between(final double var, final double min, final double max) {
+	public static double between(
+		final double var, final double min, final double max
+	) {
 		return Math.max(min, Math.min(var, max));
 	}
-	public static float between(final float var, final float min, final float max) {
+	public static float between(
+		final float var, final float min, final float max
+	) {
 		return Math.max(min, Math.min(var, max));
 	}
 	public static boolean near(final double a, final double b) {
@@ -92,7 +92,9 @@ public class Tools {
 		}
 	}
 
-	private static float finalizeColourComponent(final float c, final float p, final float q) {
+	private static float finalizeColourComponent(
+		final float c, final float p, final float q
+	) {
 		if (c < 1f/6)
 			return p + 6*c*(q-p);
 		else if (c < 0.5f)

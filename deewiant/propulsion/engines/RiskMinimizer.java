@@ -48,7 +48,7 @@ public final class RiskMinimizer extends Engine {
 	}
 
 	private static final double
-		DIST_FACTOR   = Rules.RADAR_SCAN_RADIUS*Rules.RADAR_SCAN_RADIUS,
+		DIST_FACTOR   = 1.2*Rules.RADAR_SCAN_RADIUS*Rules.RADAR_SCAN_RADIUS,
 		TINY_DISTSQ   = Tools.BOT_WIDTH*Tools.BOT_HEIGHT,
 		SHORT_DIST    = 100,
 		MIDDLE_DIST   = 150,
@@ -88,7 +88,10 @@ public final class RiskMinimizer extends Engine {
 
 		double distance = MIDDLE_DIST;
 		if (Global.target != null)
-			distance = Tools.between(distance, SHORT_DIST, 0.8 * current.distance(Global.target));
+			distance = Tools.between(
+				distance,
+				SHORT_DIST,
+				0.8 * current.distance(Global.target));
 
 		for (double angle = 0; angle < 2 * Math.PI; angle += 0.3)
 			tryPoint(Tools.projectVector(current, angle, distance), distance);
@@ -102,8 +105,10 @@ public final class RiskMinimizer extends Engine {
 
 	private void tryPoint(final Point2D point, final double dist) {
 		if (
-			point.getX() < Tools.BOT_WIDTH  || point.getX() > Global.mapWidth  - Tools.BOT_WIDTH ||
-			point.getY() < Tools.BOT_HEIGHT || point.getY() > Global.mapHeight - Tools.BOT_HEIGHT
+			point.getX() < Tools.BOT_WIDTH  ||
+			point.getX() > Global.mapWidth  - Tools.BOT_WIDTH ||
+			point.getY() < Tools.BOT_HEIGHT ||
+			point.getY() > Global.mapHeight - Tools.BOT_HEIGHT
 		)
 			return;
 
@@ -160,8 +165,8 @@ public final class RiskMinimizer extends Engine {
 
 		final long expectedTime = (long)(Math.sqrt(distSq)/Rules.MAX_VELOCITY);
 
-		for (final Enemy dude : Global.dudes.values()) {
-			if (dude.positionUnknown)
+		for (final Enemy dude : Global.dudes) {
+			if (dude.dead || dude.positionUnknown)
 				continue;
 
 /*			double risk = 0;
@@ -188,7 +193,7 @@ public final class RiskMinimizer extends Engine {
 			// compare it to its distance to point if point is closer, that's bad,
 			// so increase the risk
 			int targetedLikelihood = 0, count = 0;
-			for (final Enemy dude2 : Global.dudes.values())
+			for (final Enemy dude2 : Global.dudes)
 			if (
 				dude2 != dude &&
 				!dude2.positionUnknown &&

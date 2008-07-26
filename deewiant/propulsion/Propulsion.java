@@ -42,9 +42,9 @@ public final class Propulsion {
 			setEngine(engines[MELEE]);
 		else {
 			if (Global.target != null) {
-				//if (rammerTime())
-				//	setEngine(engines[RAMMER]);
-				//else
+				if (rammerTime(Global.target))
+					setEngine(engines[RAMMER]);
+				else
 					setEngine(engines[ONE_ON_ONE]);
 			} else
 				setEngine(engines[MELEE]);
@@ -65,13 +65,12 @@ public final class Propulsion {
 
 	// is it Rammer time?
 	// assume that the target is the only dude left
-	private boolean rammerTime() {
-		return (
-			Global.target.energy < 0.2
+	private boolean rammerTime(final Enemy dude) {
+		return
+			dude.energy < 0.2
 			|| (
-				Global.bot.getEnergy() / Global.target.energy >= 10
-				&& (
-					Global.bot.getTime() - Global.target.lastShootTime > 2*360/Rules.RADAR_TURN_RATE
-					|| Global.target.hurtMe < 10)));
+				Global.bot.getEnergy() / dude.energy >= 10 &&
+				Global.bot.getTime() - dude.lastShootTime >
+					(4*360.0)/Rules.RADAR_TURN_RATE);
 	}
 }

@@ -160,9 +160,8 @@ public final class Perception {
 				diff      * (180.0 / Math.PI),
 				Arc2D.PIE);
 
-			for (final Enemy dude : Global.dudes.values())
-			if (
-				!dude.positionUnknown &&
+			for (final Enemy dude : Global.dudes)
+			if (!dude.positionUnknown &&
 				(
 					(!dude.justSeen && arc.intersects(dude.boundingBox)) ||
 					(me.distanceSq(dude) >
@@ -247,7 +246,8 @@ public final class Perception {
 		final ArrayList<Double> absBearings =
 			new ArrayList<Double>(Global.dudes.size()+1);
 
-		for (final Enemy dude : Global.dudes.values())
+		for (final Enemy dude : Global.dudes)
+		if (!dude.dead)
 		if (dude.positionUnknown)
 			canSeeAll = false;
 		else {
@@ -413,7 +413,7 @@ public final class Perception {
 		final Point2D me =
 			new Point2D.Double(Global.bot.getX(), Global.bot.getY());
 
-		for (final Enemy dude : Global.dudes.values())
+		for (final Enemy dude : Global.dudes)
 		if (!dude.old) {
 			final Point2D pos = dude.guessPosition(now);
 

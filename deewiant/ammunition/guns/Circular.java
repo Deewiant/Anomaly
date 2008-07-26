@@ -4,11 +4,12 @@ package deewiant.ammunition.guns;
 
 import deewiant.ammunition.guns.common.Circulinear;
 import deewiant.ammunition.guns.model.Gun;
+import deewiant.common.Enemy;
 
 public final class Circular extends Gun {
 	public Circular() { super("Circular"); }
 
-	public final void setSights() {
-		super.targetAngle = Circulinear.calculate(firePower, true);
+	public final double setSights(final Enemy dude, final double bSpeed) {
+		return Circulinear.calculate(dude, bSpeed, true);
 	}
 }

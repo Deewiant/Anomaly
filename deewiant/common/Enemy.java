@@ -2,14 +2,20 @@
 
 package deewiant.common;
 
+import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
+
+import deewiant.ammunition.guns.model.Gun;
 
 // kudos to Kawigi for Point2D inheritance idea
 public final class Enemy extends Point2D.Double {
 	public String name;
+	public int id;
+
 	public double
 		absBearing, // angle from us to enemy, [0,2π)
 		avgApproachVelocity,
@@ -29,9 +35,10 @@ public final class Enemy extends Point2D.Double {
 		shotCount, // guess
 		hitMeCount;
 	public boolean
+		dead,
 		justSeen,
 		old,
-		positionUnknown = true;
+		positionUnknown;
 
 	public Rectangle2D
 		boundingBox = new Rectangle2D.Double(),
@@ -45,20 +52,31 @@ public final class Enemy extends Point2D.Double {
 		prevY;
 
 	////////////////////////////////////////////////////////////////////////////
-/*	// static info for WaveSurfing
-	final protected class StaticInfo {
-		private long scans;
-	}
-	private static Map<String, StaticInfo> info = new HashMap<String, StaticInfo>();
-	public static StaticInfo memory;
+	// accuracy info for Ammunition, remembered across rounds
 
-	// you know, static, statify...
-	public void statify() {
-		if (!Enemy.info.containsKey(this.name))
-			Enemy.info.put(this.name, new StaticInfo());
-		memory = Enemy.info.get(this.name);
+	public static final class VirtualBullet {
+		public double x, y, prevX, prevY, dx, dy;
+		public boolean alive;
+		public Line2D line;
+
+		public void move() {
+			prevX = x;
+			prevY = y;
+
+			x += dx;
+			y += dy;
+
+			line.setLine(prevX, prevY, x, y);
+		}
 	}
-*/	//\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+	public static final class VirtualGun {
+		public Gun gun;
+		public ArrayDeque<VirtualBullet> bullets;
+	}
+
+	public VirtualGun[] virtualGuns;
+	////////////////////////////////////////////////////////////////////////////
 
 	public void newInfo() {
 		prevEnergy   = energy;
@@ -77,10 +95,17 @@ public final class Enemy extends Point2D.Double {
 
 		final long diff = when - scanTime;
 
-		return
+		Point2D guess =
 			Math.abs(deltaHeading) > 0.0001
-			? circularPos(diff)
-			: linearPos(diff);
+				? circularPos(diff)
+				: linearPos(diff);
+
+		// assume that enemy stops at wall
+		guess.setLocation(
+			Tools.between(guess.getX(), 18, Global.mapWidth  - 18),
+			Tools.between(guess.getY(), 18, Global.mapHeight - 18));
+
+		return guess;
 	}
 	public Point2D guessLinearPosition(final long when) {
 		return linearPos(when - scanTime);
