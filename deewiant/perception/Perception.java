@@ -26,24 +26,28 @@ public final class Perception {
 	private double
 		radarHeading,
 		prevRadarHeading,
+		prevCW,
+		prevCCW,
+		prevToCW,
+		prevToCCW,
 		priorToCircle = -1;
 
 	private boolean
-		// whether the next sweep is to go clockwise
-		// the current direction is !clockwise
-		clockwise     = true,
-		correcting    = false, // for melee corners
-		wasOutsideArc = true,
-		// leavingArc: avoid spinning back and forth between two opposites
-		// (outside arc, radar is NW, opposite is E, turns clockwise.
-		//  outside arc, radar is NE, opposite is W, turns anticlockwise.
-		//  OOPS.)
-		leavingArc = false,
+		// True if going clockwise, false if going counterclockwise.
+		//
+		// The main purpose of clockwise is to prevent the spin direction
+		// spontaneously changing when we switch between radar modes (corner arc
+		// to edge arc, enemies arc to edge/corner arc, any arc to full circle,
+		// etc.)
+		clockwise = true,
 		// somebody nearby that we haven't seen, woops!
 		pleaseFullCircle = false;
 
-	// temp arc used in a couple of places
-	private final Arc2D arc = new Arc2D.Double();
+	private final Arc2D
+		// temp arc used here and there
+		arc = new Arc2D.Double(),
+		// the arc the radar last spun through
+		radarArc = new Arc2D.Double();
 
 	private static final double[]
 		arcCentres = {
@@ -123,95 +127,70 @@ public final class Perception {
 	}
 
 	public void perceive() {
-		final boolean melee = Global.bot.getOthers() > 1;
+		radarHeading = Global.bot.getRadarHeadingRadians();
 
 		// if just started, spin 360 degrees once
 		final long now = Global.bot.getTime();
-		if (now < 8) {
+		if (now < 8)
 			Global.bot.setTurnRadarRightRadians(Double.POSITIVE_INFINITY);
-			return;
-		}
-
-		radarHeading = Global.bot.getRadarHeadingRadians();
-
-		// check for long-lost dudes
-		// copied from RobotPeer
-		final double
-			x = Global.bot.getX(),
-			y = Global.bot.getY();
-		final Point2D me = new Point2D.Double(x, y);
-		{
+		else {
+			// check for long-lost dudes
+			// straight from RobotPeer
 			final double prevAngle =
 				Utils.normalAbsoluteAngle(prevRadarHeading - Math.PI/2);
 			final double diff =
 				Utils.normalRelativeAngle(radarHeading - prevRadarHeading);
 
-			arc.setArc(
-				Global.bot.getX() - Rules.RADAR_SCAN_RADIUS,
-				Global.bot.getY() - Rules.RADAR_SCAN_RADIUS,
+			radarArc.setArc(
+				Global.me.getX() - Rules.RADAR_SCAN_RADIUS,
+				Global.me.getY() - Rules.RADAR_SCAN_RADIUS,
 				2 * Rules.RADAR_SCAN_RADIUS,
 				2 * Rules.RADAR_SCAN_RADIUS,
-				prevAngle * (180.0 / Math.PI),
-				diff      * (180.0 / Math.PI),
+				Tools.toDeg(prevAngle),
+				Tools.toDeg(diff),
 				Arc2D.PIE);
 
 			for (final Enemy dude : Global.dudes)
-			if (!dude.positionUnknown &&
+			if (!dude.positionUnknown && !dude.justSeen &&
 				(
-					(!dude.justSeen && arc.intersects(dude.boundingBox)) ||
-					(me.distanceSq(dude) >
-						Rules.RADAR_SCAN_RADIUS*Rules.RADAR_SCAN_RADIUS)
+					radarArc.contains(dude.boundingBox) ||
+
+					dude.distance > Rules.RADAR_SCAN_RADIUS
+					// More accurate than the above but if he's that far it's
+					// usually only one or two turns before he's really out of sight
+					// anyway, so just use the quicker check
+					//
+					// !dude.boundingBox.intersectsLine(
+					// 	new Line2D.Double(
+					// 		Global.me,
+					// 		Tools.projectVector(
+					// 			Global.me,
+					// 			Tools.currentAbsBearing(dude, Global.me),
+					// 			Rules.RADAR_SCAN_RADIUS)))
 				)
 			)
 				dude.positionUnknown = true;
+
+			arc.setArc(radarArc);
+
+			// actually do stuff
+			doPerceive(Global.bot.getOthers() > 1, now);
 		}
 
 		prevRadarHeading = radarHeading;
+	}
 
+	private void doPerceive(final boolean melee, final long now) {
 		// lock if we have a target
-		if (Global.target != null) {
-			if (melee) {
-				// in melee, lock only if we're about to shoot
-				if (readyToLock() && Global.bot.getEnergy() >= 0.2) {
-
-					final long seenDelta =
-						now - Global.target.scanTime;
-
-					if (seenDelta >= 2*Tools.LOCK_ADVANCE) {
-						if (Global.target.distance < Rules.RADAR_SCAN_RADIUS/2) {
-							// target slipped in close without being seen
-							// happens VERY rarely, a pain to test
-							// sample.Walls is good at this, slipping into a
-							// corner without being spotted
-
-							if (correcting && seenDelta >= 3*Tools.LOCK_ADVANCE)
-								// been correcting for too long
-								// (this has never happened in testing
-								//  and is only a safety measure)
-								fullCircle();
-
-							else {
-								// lock to last known pos, turn a bit extra
-								lock(Global.target.absBearing, Math.PI/2);
-								correcting = true;
-							}
-							return;
-						}
-					} else {
-						lock(Global.target.absBearing);
-						correcting = false;
-						return;
-					}
-				}
-			// one-on-one, lock if recently seen
-			} else if (
-				!melee && now - Global.target.scanTime < 5*Tools.LOCK_ADVANCE
-			) {
-				lock(Global.target.absBearing);
-				return;
-			}
+		// in melee, only if we're about to shoot
+		// in one-on-one, keep the lock for a short time after last seen
+		if (
+			false && Global.target != null &&
+			(melee || now - Global.target.scanTime < 5*Tools.LOCK_ADVANCE)
+		) {
+			lock(Global.target.absBearing);
+			return;
 		}
-		correcting = false;
 
 		if (pleaseFullCircle) {
 			if (Tools.near(priorToCircle, radarHeading)) {
@@ -225,47 +204,52 @@ public final class Perception {
 			}
 		}
 
-		// if this isn't true, we certainly can't see all!
-		boolean canSeeAll = Global.dudes.size() == Global.bot.getOthers();
-		// ClockWise, CounterClockWise
-		double
-			nextCW  = Double.POSITIVE_INFINITY,
-			nextCCW = Double.NEGATIVE_INFINITY;
+		boolean canSeeAll = Global.dudes.size() >= Global.bot.getOthers();
 
-		// to find the minimal arc which covers all dudes, we:
-		// sort the list of absBearings
-		// consider all two consecutive pairs, including (last,first)
-		// find the one with the maximum angle (second - first)
-		// that is the maximum arc which covers no dudes
-		// so if we invert it, we get the minimum arc which covers them all.
-		final ArrayList<Double> absBearings =
-			new ArrayList<Double>(Global.dudes.size()+1);
+		final ArrayList<Double>
+			absBearings    = new ArrayList<Double>(2*Global.dudes.size()+1),
+			unseenBearings = new ArrayList<Double>(2*Global.dudes.size());
 
-		for (final Enemy dude : Global.dudes)
-		if (!dude.dead)
-		if (dude.positionUnknown)
+		for (final Enemy dude : Global.dudes) if (!dude.dead)
+		if (dude.positionUnknown) {
 			canSeeAll = false;
-		else {
-			final double absBearing = Tools.currentAbsBearing(dude, me);
+			break;
+		} else {
+			// TODO FIXME XXX: this is a bit of a HACK
+			// what we really want is the worst-case absBearings
+			// i.e. assume he moves at maximum speed perpendicular to us forward
+			// or backward
+			// use both of those positions instead of these two
+			// (not sure what to do about walls here: I guess correct would be to
+			// find the pos, if it's within the wall keep the same distance but
+			// move it along the circle so that it's within the battlefield)
+			final double
+				ab        = Tools.currentAbsBearing(dude,            Global.me),
+				guessedAB = Tools.currentAbsBearing(dude.guessedPos, Global.me);
 
-			absBearings.add(absBearing);
+			absBearings.add(ab);
+			absBearings.add(guessedAB);
 
-			final double dist =
-				Utils.normalAbsoluteAngle(absBearing - radarHeading);
-
-			if (dist < nextCW)
-				nextCW = dist;
-			if (dist > nextCCW)
-				nextCCW = dist;
+			// When moving, we tend to have to turn "just a bit more" to reach
+			// someone's exact pos, so use justSeen to break the cycle: consider
+			// only those we haven't justSeen.
+			if (!dude.justSeen) {
+				unseenBearings.add(ab);
+				unseenBearings.add(guessedAB);
+			}
 		}
-		nextCCW -= Math.PI*2;
 
-		if (absBearings.size() > 1) {
+		if (canSeeAll && absBearings.size() > 1) {
+			// To find the minimal arc which covers all dudes, we:
+
+			// - Sort the list of absBearings.
 			Collections.sort(absBearings);
 
-			// easier than handling the edge case manually
+			// - Consider all two consecutive pairs, including (last,first).
 			absBearings.add(absBearings.get(0));
 
+			// - Find the one with the maximum angle (second - first).
+			//   This is the maximum arc which covers no dudes.
 			double maxExtent = Double.NEGATIVE_INFINITY;
 			int maxStart = 0;
 			for (int i = 0; i < absBearings.size() - 1; ++i) {
@@ -279,36 +263,44 @@ public final class Perception {
 				}
 			}
 
+			// - Invert it: this is the minimum arc which covers all dudes.
+			final double arcExtent = 2*Math.PI - maxExtent;
+
 			arc.setAngleStart (Tools.toArcAngle(absBearings.get(maxStart)));
-			arc.setAngleExtent(360-Tools.toDeg(maxExtent));
+			arc.setAngleExtent(Tools.toDeg(arcExtent));
 
 			if (PAINT_ENEMY_ARC) {
 				Graphics2D g = Global.bot.getGraphics();
 				g.setColor(Color.CYAN);
 				g.draw(arc);
 			}
-		} else
-			arc.setAngleExtent(0);
 
-		// continue turning in the same direction, flip directions if distance to
-		// next guy is > half a circle
+			final double arcCentre = absBearings.get(maxStart) + arcExtent/2;
 
-		boolean twixtEnemiesCW = clockwise;
-		if (
-			( clockwise && nextCW  >  Math.PI) ||
-			(!clockwise && nextCCW < -Math.PI)
-		)
-			twixtEnemiesCW ^= true;
+			// if we can see everybody at once, lock in their midst
+   		if (unseenBearings.isEmpty()) {
+				lock(arcCentre);
+				return;
+			}
 
-		// TODO: if next dude is not edgemost, or arc extent > 180, spin as much
-		// as possible, not only next*, in that direction
-		// i.e. spin to the last* not next*
-		final double twixtEnemiesTurn =
-			twixtEnemiesCW ? nextCW : nextCCW;
+			// otherwise, turn between the dudes we didn't see now
 
-		// if all enemies were visible, just turn among them
-		if (canSeeAll) {
-			doExactScan(twixtEnemiesTurn, twixtEnemiesCW);
+			double
+				cw  = arcCentre,
+				ccw = cw,
+				min = Double.POSITIVE_INFINITY,
+				max = Double.NEGATIVE_INFINITY;
+
+			for (final double absBearing : unseenBearings) {
+				final double ab =
+					Utils.normalRelativeAngle(absBearing - arcCentre);
+
+				if (ab < min) { min = ab; ccw = absBearing; }
+				if (ab > max) { max = ab; cw  = absBearing; }
+			}
+			assert (min <= max);
+
+			scanExactArc(cw, ccw);
 			return;
 		}
 
@@ -326,40 +318,30 @@ public final class Perception {
 				arcCentre = arcCentres[q-1],
 				arcExtent = arcExtents[q-1];
 
-			// use the greater of this angle and the twixt-enemies angle
-			if (arcExtent > Tools.toRad(arc.getAngleExtent())) {
-				final double
-					edge1 = Utils.normalAbsoluteAngle(arcCentre - arcExtent / 2);
+			final double
+				ccw = Utils.normalAbsoluteAngle(arcCentre - arcExtent / 2);
 
-				// Having actually read the documentation this time, I wonder how
-				// exactly scanArc() works without using Tools.*ArcAngle at all.
+			arc.setAngleStart (Tools.toArcAngle(ccw  -   EXTRATURN));
+			arc.setAngleExtent(Tools.toDeg(arcExtent + 2*EXTRATURN));
 
-				arc.setAngleStart (Tools.toArcAngle(edge1 -  EXTRATURN));
-				arc.setAngleExtent(Tools.toDeg(arcExtent + 2*EXTRATURN));
-
-				if (PAINT_EDGE_ARCS) {
-					Graphics2D g = Global.bot.getGraphics();
-					g.setColor(Color.MAGENTA);
-					g.draw(arc);
-				}
-
-				if (possibleSlippage(arc)) {
-					fullCircle();
-					return;
-				}
-
-				final double
-					edge2 = Utils.normalAbsoluteAngle(arcCentre + arcExtent / 2);
-
-				scanArc(arcCentre, arcExtent, edge1, edge2);
-			} else {
-				if (possibleSlippage(arc)) {
-					fullCircle();
-					return;
-				}
-
-				doExactScan(twixtEnemiesTurn, twixtEnemiesCW);
+			if (PAINT_EDGE_ARCS) {
+				Graphics2D g = Global.bot.getGraphics();
+				g.setColor(Color.MAGENTA);
+				g.draw(arc);
 			}
+
+			if (possibleSlippage(arc)) {
+				fullCircle();
+				return;
+			}
+
+			arc.setAngleStart (Tools.toArcAngle(ccw));
+			arc.setAngleExtent(Tools.toDeg(arcExtent));
+
+			final double
+				cw = Utils.normalAbsoluteAngle(arcCentre + arcExtent / 2);
+
+			scanInexactArc(cw, ccw);
 		}
 	}
 
@@ -383,7 +365,6 @@ public final class Perception {
 			clockwise
 				? Double.POSITIVE_INFINITY
 				: Double.NEGATIVE_INFINITY);
-		wasOutsideArc = false;
 	}
 
 	private void lock(final double th) {
@@ -398,8 +379,6 @@ public final class Perception {
 		Global.bot.setTurnRadarRightRadians(
 			toEnemyCentre +
 			(clockwise ? offset : -offset));
-
-		wasOutsideArc = false;
 	}
 
 	private boolean possibleSlippage(final Arc2D arc) {
@@ -432,89 +411,77 @@ public final class Perception {
 		return q;
 	}
 
-	private void scanArc(
-		final double arcCentre, final double arcExtent,
-		final double edge1, final double edge2
-	) {
-		arc.setAngleStart (edge1     * (180.0 / Math.PI));
-		arc.setAngleExtent(arcExtent * (180.0 / Math.PI));
+	// Turn between cw and ccw.
+	// Assumes cw is clockwise of arc's centre and ccw is counterclockwise.
+	// Assumes arc represents the arc.
+	// Assumes arc extent does not exceed 180 degrees.
+	private void scanExactArc(final double cw, final double ccw) {
+		final double
+			toCW  = Utils.normalRelativeAngle( cw - radarHeading),
+			toCCW = Utils.normalRelativeAngle(ccw - radarHeading);
 
-		final boolean outsideArc =
-			!this.arc.containsAngle(radarHeading * 180.0 / Math.PI);
+		// Our arc is all in one direction: go in that direction.
+		if (Math.signum(toCW) == Math.signum(toCCW))
+			clockwise = toCW > 0;
 
-		boolean toNext = false;
-		double nextEdge = Double.NaN;
+		prevCW  = cw;
+		prevCCW = ccw;
 
-		if (outsideArc) {
-			if (wasOutsideArc) {
-				// get the opposite edge
-				// move the radar through the quickest path to that edge
+		doExactScan(
+			arc.containsAngle(Tools.toArcAngle(radarHeading))
+			? (clockwise ? toCW : toCCW)
+			// Turn toward the far end if outside arc.
+			// Explanatory pic:
+			//
+			// \ /
+			//  B---
+			//
+			// B is the bot, --- is the current pos, \/ is the arc
+			// turning anticlockwise
+			//
+			// If we don't do this, we'd turn first to the / and stop there,
+			// which is a waste if we could turn further.
+			: (clockwise ? Math.max(toCW, toCCW) : Math.min(toCW, toCCW)));
+	}
 
-				if (leavingArc)
-					return;
+	// Turn between cw and ccw, but add EXTRATURN to the turn at each edge.
+	// Same assumptions as above.
+	private void scanInexactArc(final double cw, final double ccw) {
+		double
+			toCW  = Utils.normalRelativeAngle( cw - radarHeading),
+			toCCW = Utils.normalRelativeAngle(ccw - radarHeading);
 
-				nextEdge = getNextEdge(arcCentre, edge1, edge2);
-				toNext = true;
+		// We need the non-signum tests here since with EXTRATURN, the arc extent
+		// may exceed 180 degrees.
+		if (
+			Math.signum(toCW) == Math.signum(toCCW) ||
+			( clockwise && radarArc.containsAngle(Tools.toArcAngle( cw))) ||
+			(!clockwise && radarArc.containsAngle(Tools.toArcAngle(ccw)))
+		) {
+			clockwise ^= true;
 
-				leavingArc = true;
-
-			} else {
-				// we are now outside the arc, but weren't just now
-				// so we reached the edge: turn back and go to the other one
-
-				if (clockwise) {
-					clockwise = false;
-					doExactScan(-arcExtent);
-				} else {
-					clockwise = true;
-					doExactScan( arcExtent);
-				}
-
-				leavingArc = false;
-			}
-		} else {
-			// we are currently inside the arc
-			// go to the next edge
-
-			nextEdge = getNextEdge(radarHeading, edge1, edge2);
-			toNext = true;
-
-			leavingArc = false;
+			// HACK?
+			// Takes care of when the arc extent is 180 degrees and we want to
+			// spin within it all the time.
+			if (Math.signum(prevToCW)  != Math.signum(toCW))  toCW  *= -1;
+			if (Math.signum(prevToCCW) != Math.signum(toCCW)) toCCW *= -1;
 		}
 
-		if (toNext) {
-			final double turn =
-				Utils.normalRelativeAngle(nextEdge - radarHeading);
-			clockwise = turn > 0;
-			doExactScan(turn);
-		}
+		prevCW    = cw;
+		prevCCW   = ccw;
+		prevToCW  = toCW;
+		prevToCCW = toCCW;
 
-		wasOutsideArc = outsideArc;
+		final double turn =
+			arc.containsAngle(Tools.toArcAngle(radarHeading))
+				? (clockwise ? toCW : toCCW)
+				: (clockwise ? Math.max(toCW, toCCW) : Math.min(toCW, toCCW));
+
+		doExactScan(turn + Math.signum(turn)*EXTRATURN);
 	}
 
 	private void doExactScan(final double turn) {
-		// Add a bit of extra to the turn to account for bot movement, if
-		// scanning at a bot, or for scanning the whole quadrant, not just to the
-		// middle, if scanning a quadrant.
-		Global.bot.setTurnRadarRightRadians(
-			turn + Math.signum(turn) * EXTRATURN);
-	}
-	private void doExactScan(final double turn, final boolean cw) {
-		clockwise = cw;
-		doExactScan(turn);
-	}
-
-	private double getNextEdge(
-		final double whence,
-		final double edge1, final double edge2
-	) {
-		final double
-			dist1 = Utils.normalRelativeAngle(edge1 - whence),
-			dist2 = Utils.normalRelativeAngle(edge2 - whence);
-		return
-			clockwise
-				? (dist1 >= dist2 ? edge1 : edge2)
-				: (dist1 <= dist2 ? edge1 : edge2);
+		Global.bot.setTurnRadarRightRadians(turn);
 	}
 
 	//
@@ -544,6 +511,6 @@ public final class Perception {
 
 	private static final boolean
 		PAINT_QUADRANTS = false,
-		PAINT_EDGE_ARCS = false,
+		PAINT_EDGE_ARCS = true,
 		PAINT_ENEMY_ARC = true;
 }
