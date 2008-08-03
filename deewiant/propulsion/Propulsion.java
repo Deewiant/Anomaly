@@ -32,23 +32,17 @@ public final class Propulsion {
 	}
 
 	public void victoryDance() {
-		setEngine(null);
 		Global.bot.setMaxVelocity(0);
 		Global.bot.setTurnLeftRadians(Double.POSITIVE_INFINITY);
 	}
 
 	public void onScannedRobot(final Enemy dude) {
-		if (Global.bot.getOthers() > 1)
+		if (rammerTime())
+			setEngine(engines[RAMMER]);
+		else if (Global.bot.getOthers() > 1 || Global.target == null)
 			setEngine(engines[MELEE]);
-		else {
-			if (Global.target != null) {
-				if (rammerTime(Global.target))
-					setEngine(engines[RAMMER]);
-				else
-					setEngine(engines[ONE_ON_ONE]);
-			} else
-				setEngine(engines[MELEE]);
-		}
+		else
+			setEngine(engines[ONE_ON_ONE]);
 
 		engine.onScannedRobot(dude);
 	}
@@ -58,19 +52,24 @@ public final class Propulsion {
 	}
 
 	private void setEngine(final Engine e) {
-		if (e != engine && e != null)
+		if (e != engine) {
 			Global.out.printf("Engine set to: %s\n", e.name);
-		engine = e;
+			engine = e;
+		}
 	}
 
-	// is it Rammer time?
-	// assume that the target is the only dude left
-	private boolean rammerTime(final Enemy dude) {
-		return
-			dude.energy < 0.2
-			|| (
-				Global.bot.getEnergy() / dude.energy >= 10 &&
-				Global.bot.getTime() - dude.lastShootTime >
-					(4*360.0)/Rules.RADAR_TURN_RATE);
+	// Is it Rammer time?
+	private boolean rammerTime() {
+		final long   now = Global.bot.getTime();
+		final double nrg = Global.bot.getEnergy();
+
+		for (final Enemy dude : Global.dudes) if (!dude.dead)
+		if (!(
+			(dude.energy < 0.2 || (dude.energy <= 4 && nrg >= 40)) &&
+			now - dude.lastShootTime >
+				dude.distance(Global.me) / Rules.getBulletSpeed(dude.firePower)
+		))
+			return false;
+		return true;
 	}
 }

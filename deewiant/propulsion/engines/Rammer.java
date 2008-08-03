@@ -7,5 +7,5 @@ import deewiant.propulsion.engines.model.Engine;
 
 public final class Rammer extends Engine {
 	public Rammer() { super("Ramming"); }
-	public void move() { super.goTo(Global.target); }
+	public void move() { if (Global.target != null) super.goTo(Global.target); }
 }
