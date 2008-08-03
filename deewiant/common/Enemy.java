@@ -42,7 +42,10 @@ public final class Enemy extends Point2D.Double {
 
 	public Rectangle2D
 		boundingBox = new Rectangle2D.Double(),
-		vicinity    = new Rectangle2D.Double();
+		vicinity    = new Rectangle2D.Double(),
+		guessedBBox = new Rectangle2D.Double();
+
+	public Point2D guessedPos;
 
 	public double
 		prevEnergy,
@@ -86,8 +89,22 @@ public final class Enemy extends Point2D.Double {
 		prevY        = y;
 	}
 
+	public void setGuessPosition(final long when) {
+		guessedPos = guessPosition(when);
+		setBBox(guessedBBox, guessedPos);
+	}
+
 	public Point2D guessPosition(final long when) {
 		return guessCircularPosition(when);
+	}
+
+	public void setBBox(final Rectangle2D box, final Point2D pt) {
+		// right out of RobotPeer
+		box.setRect(
+			pt.getX() - Tools.BOT_WIDTH /2 + 2,
+			pt.getY() - Tools.BOT_HEIGHT/2 + 2,
+			Tools.BOT_WIDTH - 4,
+			Tools.BOT_HEIGHT - 4);
 	}
 
 	// http://www-128.ibm.com/developerworks/library/j-circular/

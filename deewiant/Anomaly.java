@@ -4,7 +4,8 @@ package deewiant;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
-import java.awt.geom.AffineTransform;
+import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
 
 import robocode.AdvancedRobot;
 import robocode.BulletHitEvent;
@@ -104,7 +105,6 @@ public final class Anomaly extends AdvancedRobot {
 		dude.scanTime = now;
 		dude.velocity = e.getVelocity();
 		dude.energy   = e.getEnergy();
-		dude.name     = e.getName();
 
 		dude.absBearing =
 			Utils.normalAbsoluteAngle(super.getHeadingRadians() + dude.bearing);
@@ -131,17 +131,7 @@ public final class Anomaly extends AdvancedRobot {
 		if (Global.target == null || preferableTarget(dude))
 			newTarget(dude);
 
-		dude.boundingBox.setRect(
-			dude.x - Tools.BOT_WIDTH /2,
-			dude.y - Tools.BOT_HEIGHT/2,
-			Tools.BOT_WIDTH,
-			Tools.BOT_HEIGHT);
-
-		dude.boundingBox =
-			AffineTransform
-			.getRotateInstance(dude.heading, dude.getX(), dude.getY())
-			.createTransformedShape(dude.boundingBox)
-			.getBounds2D();
+		dude.setBBox(dude.boundingBox, dude);
 
 		dude.vicinity.setRect(
 			dude.x - Tools.BOT_WIDTH *1.25,
@@ -156,13 +146,22 @@ public final class Anomaly extends AdvancedRobot {
 	}
 
 	private void updateDudes() {
-		for (final Enemy dude : Global.dudes)
-		if (!dude.dead) {
-			final double timediff = super.getTime() - dude.scanTime;
-			if (timediff > 360 / Rules.RADAR_TURN_RATE)
-				dude.old = true;
-			else if (timediff > 1)
+		final long now = super.getTime();
+
+		for (final Enemy dude : Global.dudes) if (!dude.dead) {
+
+			final long timediff = now - dude.scanTime;
+			if (timediff > 0) {
 				dude.justSeen = false;
+
+				if (timediff > 360 / Rules.RADAR_TURN_RATE)
+					dude.old = dude.positionUnknown = true;
+
+				dude.setGuessPosition(now);
+			} else {
+				dude.guessedPos  = dude;
+				dude.guessedBBox.setRect(dude.boundingBox);
+			}
 		}
 	}
 
@@ -188,6 +187,7 @@ public final class Anomaly extends AdvancedRobot {
 		if (id == null) {
 			dude = new Enemy();
 
+			dude.name = name;
 			dude.id = Global.id++;
 			Global.dudeIds.put(name, dude.id);
 			Global.dudes.add(dude);
@@ -278,11 +278,9 @@ public final class Anomaly extends AdvancedRobot {
 			return;
 
 		for (final Enemy dude : Global.dudes)
-		if (!dude.dead) {
+		if (!dude.old) {
 
-			if (dude.old)
-				g.setColor(Color.GRAY);
-			else if (dude.positionUnknown)
+			if (dude.positionUnknown)
 				g.setColor(Color.ORANGE);
 			else if (dude == Global.target)
 				g.setColor(Color.RED);
@@ -293,6 +291,7 @@ public final class Anomaly extends AdvancedRobot {
 
 			g.setColor(Color.GRAY);
 			g.draw(dude.vicinity);
+			g.draw(dude.guessedBBox);
 		}
 	}
 

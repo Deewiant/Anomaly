@@ -98,24 +98,19 @@ public final class Perception {
 		 * | 8 |    3    | 7 |
 		 * |   |         |   |
 		 * O---+---------+---+
-		 *
-		 * it also seems that though the Java Platform doc says it's the upper
-		 * left corner, it's actually the lower left we're passing to the
-		 * constructor (and it works)
 		 */
 
-		if (quadrants[0] != null)
-			return;
-
-		quadrants[0] = new Rectangle2D.Double(    cornerSize,     cornerSize, w - 2*cornerSize, h - 2*cornerSize);
-		quadrants[1] = new Rectangle2D.Double(    cornerSize, h - cornerSize, w - 2*cornerSize,       cornerSize);
-		quadrants[2] = new Rectangle2D.Double(w - cornerSize,     cornerSize,       cornerSize, h - 2*cornerSize);
-		quadrants[3] = new Rectangle2D.Double(    cornerSize,              0, w - 2*cornerSize,       cornerSize);
-		quadrants[4] = new Rectangle2D.Double(             0,     cornerSize,       cornerSize, h - 2*cornerSize);
-		quadrants[5] = new Rectangle2D.Double(             0, h - cornerSize,       cornerSize,       cornerSize);
-		quadrants[6] = new Rectangle2D.Double(w - cornerSize, h - cornerSize,       cornerSize,       cornerSize);
-		quadrants[7] = new Rectangle2D.Double(w - cornerSize,              0,       cornerSize,       cornerSize);
-		quadrants[8] = new Rectangle2D.Double(             0,              0,       cornerSize,       cornerSize);
+		if (quadrants[0] == null) {
+			quadrants[0] = new Rectangle2D.Double(    cornerSize,     cornerSize, w - 2*cornerSize, h - 2*cornerSize);
+			quadrants[1] = new Rectangle2D.Double(    cornerSize, h - cornerSize, w - 2*cornerSize,       cornerSize);
+			quadrants[2] = new Rectangle2D.Double(w - cornerSize,     cornerSize,       cornerSize, h - 2*cornerSize);
+			quadrants[3] = new Rectangle2D.Double(    cornerSize,              0, w - 2*cornerSize,       cornerSize);
+			quadrants[4] = new Rectangle2D.Double(             0,     cornerSize,       cornerSize, h - 2*cornerSize);
+			quadrants[5] = new Rectangle2D.Double(             0, h - cornerSize,       cornerSize,       cornerSize);
+			quadrants[6] = new Rectangle2D.Double(w - cornerSize, h - cornerSize,       cornerSize,       cornerSize);
+			quadrants[7] = new Rectangle2D.Double(w - cornerSize,              0,       cornerSize,       cornerSize);
+			quadrants[8] = new Rectangle2D.Double(             0,              0,       cornerSize,       cornerSize);
+		}
 	}
 
 	// for when we've been shot at from a
@@ -323,7 +318,7 @@ public final class Perception {
 		 * if in the middle, 360 degrees
 		 */
 
-		final int q = getQuadrant(x, y);
+		final int q = getQuadrant(Global.me.getX(), Global.me.getY());
 		if (q == 0)
 			fullCircle();
 		else {
@@ -415,13 +410,11 @@ public final class Perception {
 
 		for (final Enemy dude : Global.dudes)
 		if (!dude.old) {
-			final Point2D pos = dude.guessPosition(now);
+			final double absBearing =
+				Tools.currentAbsBearing(dude.guessedPos, me);
 
-			final double absBearing = Tools.currentAbsBearing(pos, me);
-
-			if (!arc.containsAngle(Tools.toArcAngle(absBearing))) {
+			if (!arc.containsAngle(Tools.toArcAngle(absBearing)))
 				return true;
-			}
 		}
 		return false;
 	}
