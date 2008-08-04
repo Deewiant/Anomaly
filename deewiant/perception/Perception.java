@@ -41,7 +41,8 @@ public final class Perception {
 		// etc.)
 		clockwise = true,
 		// somebody nearby that we haven't seen, woops!
-		pleaseFullCircle = false;
+		pleaseFullCircle = false,
+		wasInArc = true;
 
 	private final Arc2D
 		// temp arc used here and there
@@ -423,28 +424,34 @@ public final class Perception {
 			toCW  = Utils.normalRelativeAngle( cw - radarHeading),
 			toCCW = Utils.normalRelativeAngle(ccw - radarHeading);
 
-		// Our arc is all in one direction: go in that direction.
-		if (Math.signum(toCW) == Math.signum(toCCW))
+		// We went outside the arc and it's all in one direction: go in that
+		// direction.
+		//
+		// We need wasInArc since it's possible that we're on the completely
+		// opposite side of the arc, in which case the signums would oscillate
+		// and we'd be scanning the arc on the opposite side.
+		if (wasInArc && Math.signum(toCW) == Math.signum(toCCW))
 			clockwise = toCW > 0;
 
-		prevCW  = cw;
-		prevCCW = ccw;
+		prevCW   = cw;
+		prevCCW  = ccw;
+		wasInArc = arc.containsAngle(Tools.toArcAngle(radarHeading));
 
 		doExactScan(
-			arc.containsAngle(Tools.toArcAngle(radarHeading))
-			? (clockwise ? toCW : toCCW)
-			// Turn toward the far end if outside arc.
-			// Explanatory pic:
-			//
-			// \ /
-			//  B---
-			//
-			// B is the bot, --- is the current pos, \/ is the arc
-			// turning anticlockwise
-			//
-			// If we don't do this, we'd turn first to the / and stop there,
-			// which is a waste if we could turn further.
-			: (clockwise ? Math.max(toCW, toCCW) : Math.min(toCW, toCCW)));
+			wasInArc
+				? (clockwise ? toCW : toCCW)
+				// Turn toward the far end if outside arc.
+				// Explanatory pic:
+				//
+				// \ /
+				//  B---
+				//
+				// B is the bot, --- is the current pos, \/ is the arc
+				// turning anticlockwise
+				//
+				// If we don't do this, we'd turn first to the / and stop there,
+				// which is a waste if we could turn further.
+				: (clockwise ? Math.max(toCW, toCCW) : Math.min(toCW, toCCW)));
 	}
 
 	// Turn between cw and ccw, but add EXTRATURN to the turn at each edge.
@@ -456,11 +463,11 @@ public final class Perception {
 
 		// We need the non-signum tests here since with EXTRATURN, the arc extent
 		// may exceed 180 degrees.
-		if (
+		if (wasInArc && (
 			Math.signum(toCW) == Math.signum(toCCW) ||
 			( clockwise && radarArc.containsAngle(Tools.toArcAngle( cw))) ||
 			(!clockwise && radarArc.containsAngle(Tools.toArcAngle(ccw)))
-		) {
+		)) {
 			clockwise ^= true;
 
 			// HACK?
@@ -474,9 +481,10 @@ public final class Perception {
 		prevCCW   = ccw;
 		prevToCW  = toCW;
 		prevToCCW = toCCW;
+		wasInArc  = arc.containsAngle(Tools.toArcAngle(radarHeading));
 
 		final double turn =
-			arc.containsAngle(Tools.toArcAngle(radarHeading))
+			wasInArc
 				? (clockwise ? toCW : toCCW)
 				: (clockwise ? Math.max(toCW, toCCW) : Math.min(toCW, toCCW));
 
