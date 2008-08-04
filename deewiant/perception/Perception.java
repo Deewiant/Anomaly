@@ -185,8 +185,9 @@ public final class Perception {
 		// in melee, only if we're about to shoot
 		// in one-on-one, keep the lock for a short time after last seen
 		if (
-			Global.target != null &&
-			(melee || now - Global.target.scanTime < 5*Tools.LOCK_ADVANCE)
+			Global.target != null && (
+				( melee && readyToLock()) ||
+				(!melee && now - Global.target.scanTime < 5*Tools.LOCK_ADVANCE))
 		) {
 			lock(Global.target.absBearing);
 			return;
@@ -353,7 +354,9 @@ public final class Perception {
 	}
 
 	public boolean readyToLock() {
-		return Global.bot.getGunHeat() / gunCoolingRate < Tools.LOCK_ADVANCE;
+		return
+			Global.bot.getEnergy() >= 0.2 &&
+			Global.bot.getGunHeat() / gunCoolingRate < Tools.LOCK_ADVANCE;
 	}
 
 	//
