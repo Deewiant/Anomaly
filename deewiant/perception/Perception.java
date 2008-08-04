@@ -268,6 +268,14 @@ public final class Perception {
 			// - Invert it: this is the minimum arc which covers all dudes.
 			final double arcExtent = 2*Math.PI - maxExtent;
 
+			// Don't bother going further if it's over half a circle: we'd end up
+			// doing a full circle anyway (and the code in scanExactArc assumes
+			// that we don't exceed half a circle).
+			if (arcExtent > Math.PI) {
+				fullCircle();
+				return;
+			}
+
 			arc.setAngleStart (Tools.toArcAngle(absBearings.get(maxStart)));
 			arc.setAngleExtent(Tools.toDeg(arcExtent));
 
