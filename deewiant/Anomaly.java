@@ -162,6 +162,25 @@ public final class Anomaly extends AdvancedRobot {
 				dude.guessedPos  = dude;
 				dude.guessedBBox.setRect(dude.boundingBox);
 			}
+
+			if (PAINT_ENEMIES && !dude.old) {
+				final Graphics2D g = super.getGraphics();
+
+				g.setColor(Color.GRAY);
+				g.draw(dude.vicinity);
+
+				g.setColor(Color.LIGHT_GRAY);
+				g.draw(dude.guessedBBox);
+
+				if (dude.positionUnknown)
+					g.setColor(Color.ORANGE);
+				else if (dude == Global.target)
+					g.setColor(Color.RED);
+				else
+					g.setColor(Color.WHITE);
+
+				g.draw(dude.boundingBox);
+			}
 		}
 	}
 
@@ -273,26 +292,6 @@ public final class Anomaly extends AdvancedRobot {
 	public void onPaint(final Graphics2D g) {
 		if (perception != null) perception.onPaint(g);
 		if (propulsion != null) propulsion.onPaint(g);
-
-		if (!PAINT_ENEMIES)
-			return;
-
-		for (final Enemy dude : Global.dudes)
-		if (!dude.old) {
-
-			if (dude.positionUnknown)
-				g.setColor(Color.ORANGE);
-			else if (dude == Global.target)
-				g.setColor(Color.RED);
-			else
-				g.setColor(Color.WHITE);
-
-			g.draw(dude.boundingBox);
-
-			g.setColor(Color.GRAY);
-			g.draw(dude.vicinity);
-			g.draw(dude.guessedBBox);
-		}
 	}
 
 	private static final boolean
