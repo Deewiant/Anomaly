@@ -185,7 +185,7 @@ public final class Perception {
 		// in melee, only if we're about to shoot
 		// in one-on-one, keep the lock for a short time after last seen
 		if (
-			false && Global.target != null &&
+			Global.target != null &&
 			(melee || now - Global.target.scanTime < 5*Tools.LOCK_ADVANCE)
 		) {
 			lock(Global.target.absBearing);
