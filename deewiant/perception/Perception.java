@@ -154,6 +154,9 @@ public final class Perception {
 			for (final Enemy dude : Global.dudes)
 			if (!dude.positionUnknown && !dude.justSeen &&
 				(
+					// This isn't quite optimal: if an enemy is orbiting really
+					// close by, this might be true even though we know that the
+					// enemy is at most one radar sweep ahead.
 					radarArc.contains(dude.boundingBox) ||
 
 					dude.distance > Rules.RADAR_SCAN_RADIUS
