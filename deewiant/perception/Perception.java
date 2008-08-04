@@ -220,27 +220,32 @@ public final class Perception {
 			canSeeAll = false;
 			break;
 		} else {
-			// TODO FIXME XXX: this is a bit of a HACK
-			// what we really want is the worst-case absBearings
-			// i.e. assume he moves at maximum speed perpendicular to us forward
-			// or backward
-			// use both of those positions instead of these two
-			// (not sure what to do about walls here: I guess correct would be to
-			// find the pos, if it's within the wall keep the same distance but
-			// move it along the circle so that it's within the battlefield)
-			final double
-				ab        = Tools.currentAbsBearing(dude,            Global.me),
-				guessedAB = Tools.currentAbsBearing(dude.guessedPos, Global.me);
-
-			absBearings.add(ab);
-			absBearings.add(guessedAB);
+			final double currentAB = Tools.currentAbsBearing(dude, Global.me);
 
 			// When moving, we tend to have to turn "just a bit more" to reach
 			// someone's exact pos, so use justSeen to break the cycle: consider
 			// only those we haven't justSeen.
-			if (!dude.justSeen) {
-				unseenBearings.add(ab);
-				unseenBearings.add(guessedAB);
+			if (dude.justSeen)
+				absBearings.add(currentAB);
+			else {
+				// This should take into account walls: we assume that the angle
+				// calculated in maxAngVel is 90 degrees (and its sine is thus 1 so
+				// it disappears from the calculation), but if moving at that angle
+				// would make the enemy hit a wall, the actual angle should be
+				// less.
+				//
+				// Nevertheless, this is always correct, merely suboptimal.
+				final double
+					currentDist = Global.me.distance(dude),
+					maxAngVel   = Rules.MAX_VELOCITY / currentDist,
+					maxTravel   = maxAngVel * (now - dude.scanTime),
+					maxAB       = Utils.normalAbsoluteAngle(currentAB + maxTravel),
+					minAB       = Utils.normalAbsoluteAngle(currentAB - maxTravel);
+
+				unseenBearings.add(maxAB);
+				unseenBearings.add(minAB);
+				   absBearings.add(maxAB);
+				   absBearings.add(minAB);
 			}
 		}
 
