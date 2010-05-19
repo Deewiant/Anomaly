@@ -35,7 +35,7 @@ public final class ShrapnelDodger extends Engine {
 	private static final double
 		BULLET_FORCE = -500,
 		DUDE_FORCE   = -5000,
-		WALL_FORCE   = -4000;
+		WALL_FORCE   = -1000; // Only applied when near wall
 
 	private final VirtualBullets bullets = new VirtualBullets();
 
@@ -95,22 +95,17 @@ Global.out.printf("%s: (%f, %f) (strength %f)\n", dude.name, Math.sin(bearing)*f
 			y = Global.me.getY(),
 			mw = Global.mapWidth,
 			mh = Global.mapHeight,
-			ww = Tools.BOT_WIDTH  + 50,
-			wh = Tools.BOT_HEIGHT + 50,
-			 east_dsq = Global.me.distanceSq(mw - ww, y),
-			 west_dsq = Global.me.distanceSq(     ww, y),
-			north_dsq = Global.me.distanceSq(x, mh - wh),
-			south_dsq = Global.me.distanceSq(x,      wh);
+			ww = Tools.BOT_WIDTH/2,
+			wh = Tools.BOT_HEIGHT/2,
+			 eastDist = Math.abs(mw - ww - x),
+			 westDist = Math.abs(ww - x),
+			northDist = Math.abs(mh - wh - y),
+			southDist = Math.abs(wh - y);
 
-Global.out.printf("East  wall: (%f, 0) (dist %f)\n", -WALL_FORCE / east_dsq,  Math.sqrt(east_dsq));
-Global.out.printf("West  wall: (%f, 0) (dist %f)\n",  WALL_FORCE / west_dsq,  Math.sqrt(west_dsq));
-Global.out.printf("North wall: (0, %f) (dist %f)\n",  WALL_FORCE / north_dsq, Math.sqrt(north_dsq));
-Global.out.printf("South wall: (0, %f) (dist %f)\n", -WALL_FORCE / south_dsq, Math.sqrt(south_dsq));
-
-		fx += WALL_FORCE /  east_dsq;
-		fx -= WALL_FORCE /  west_dsq;
-		fy += WALL_FORCE / north_dsq;
-		fy -= WALL_FORCE / south_dsq;
+		if ( eastDist < ww) { Global.out.printf("East  wall: (%f, 0) (dist %f)\n", WALL_FORCE / eastDist,  eastDist);   fx += WALL_FORCE /  eastDist; }
+		if ( westDist < ww) { Global.out.printf("West  wall: (%f, 0) (dist %f)\n", -WALL_FORCE / westDist,  westDist);  fx -= WALL_FORCE /  westDist; }
+		if (northDist < wh) { Global.out.printf("North wall: (0, %f) (dist %f)\n",  WALL_FORCE / northDist, northDist); fy += WALL_FORCE / northDist; }
+		if (southDist < wh) { Global.out.printf("South wall: (0, %f) (dist %f)\n", -WALL_FORCE / southDist, southDist); fy -= WALL_FORCE / southDist; }
 
 Global.out.printf("Total: (%f, %f)\n", fx, fy);
 Global.out.printf("Turning toward: %f\n", Math.toDegrees(Math.atan2(fy, fx)));
