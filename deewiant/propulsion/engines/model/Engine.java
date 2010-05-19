@@ -19,6 +19,7 @@ public abstract class Engine {
 	public abstract void move();
 
 	public void onScannedRobot(final Enemy dude) {}
+	public void onFired       (final Enemy dude) {}
 
 	protected final void goTo(final Point2D destination) {
 

@@ -18,11 +18,13 @@ public final class Propulsion {
 		new RiskMinimizer(),
 //		new WaveSurfer(),
 		new Rammer(),
+		new ShrapnelDodger(),
 	};
 	private static final int
 		MELEE      = 0,
 		ONE_ON_ONE = MELEE,
-		RAMMER     = 1;
+		RAMMER     = 1,
+		DODGER     = 2;
 
 	private Engine engine;
 
@@ -39,12 +41,18 @@ public final class Propulsion {
 	public void onScannedRobot(final Enemy dude) {
 		if (rammerTime())
 			setEngine(engines[RAMMER]);
-		else if (Global.bot.getOthers() > 1 || Global.target == null)
+		else if (dodgerFeelingLucky())
+			setEngine(engines[DODGER]);
+		else if (Global.bot.getOthers() > 1)
 			setEngine(engines[MELEE]);
 		else
 			setEngine(engines[ONE_ON_ONE]);
 
 		engine.onScannedRobot(dude);
+	}
+
+	public void onFired(final Enemy dude) {
+		if (engine != null) engine.onFired(dude);
 	}
 
 	private void setEngine(final Engine e) {
@@ -71,6 +79,11 @@ public final class Propulsion {
 				dude.distance(Global.me) / Rules.getBulletSpeed(dude.firePower)
 		))
 			return false;
+		return true;
+	}
+
+	private boolean dodgerFeelingLucky() {
+		// FIXME
 		return true;
 	}
 }

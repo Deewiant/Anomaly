@@ -3,6 +3,7 @@
 package deewiant.common;
 
 import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -19,7 +20,8 @@ public final class Global {
 	public static int                  id = 0;
 	public static AdvancedRobot        bot;
 	public static PrintStream          out;
-	public static Point2D              me = new Point2D.Double();
+	public static Point2D              me    = new Point2D.Double();
+	public static Rectangle2D          meBox = new Rectangle2D.Double();
 	public static double
 		mapWidth, mapHeight,
 		damageTaken;

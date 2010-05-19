@@ -59,6 +59,7 @@ public final class Anomaly extends AdvancedRobot {
 
 			updateDudes();
 			Global.me.setLocation(super.getX(), super.getY());
+			Tools.setBotBox(Global.meBox, Global.me);
 
 			perception.perceive();
 			ammunition.munition();
@@ -127,6 +128,7 @@ public final class Anomaly extends AdvancedRobot {
 				: -1;
 
 		if (dude.firePower != -1) {
+			propulsion.onFired(dude);
 			dude.lastShootTime = now;
 			++dude.shotCount;
 		}
