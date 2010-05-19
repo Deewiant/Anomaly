@@ -1,5 +1,5 @@
 <project default="compile">
-	<property name="targetdir" value="../../robots"/>
+	<property name="targetdir" value="robocode/robots"/>
 	<property name="classdir" value="${targetdir}/deewiant"/>
 
 	<target name="compile">
@@ -7,9 +7,10 @@
 			srcdir="./"
 			destdir="${targetdir}"
 			source="1.6" target="1.6"
-			classpath="../../libs/robocode.jar;."
+			classpath="robocode/libs/robocode.jar;."
 			encoding="UTF-8"
-			debug="on">
+			debug="on"
+			includeAntRuntime="false">
 
 			<include name="deewiant/**/*.java"/>
 			<compilerarg compiler="modern" value="-Xlint:all,-serial"/>
