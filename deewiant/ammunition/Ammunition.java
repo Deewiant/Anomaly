@@ -130,13 +130,17 @@ public final class Ammunition {
 
 	public void spewTheStats() {
 		int shots = 0, hits = 0, shotsB = 0, hitsB = 0;
-		for (Gun gun : guns) {
+		for (Gun gun : guns)
+		if (gun.getBattleShots() > 0) {
 			shots  += gun.getShots();
 			hits   += gun.getHits();
 			shotsB += gun.getBattleShots();
 			hitsB  += gun.getBattleHits();
 			gun.spewStatsAndReset();
 		}
+
+		if (shotsB == 0)
+			return;
 
 		final StringBuilder s = new StringBuilder();
 		final Formatter f = new Formatter(s);
