@@ -131,7 +131,7 @@ public final class Anomaly extends AdvancedRobot {
 		if (Global.target == null || preferableTarget(dude))
 			newTarget(dude);
 
-		dude.setBBox(dude.boundingBox, dude);
+		Tools.setBotBox(dude.boundingBox, dude);
 
 		dude.vicinity.setRect(
 			dude.x - Tools.BOT_WIDTH *1.25,

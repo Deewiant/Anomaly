@@ -6,6 +6,7 @@ import robocode.util.Utils;
 
 import java.awt.Color;
 import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
 
 public class Tools {
 	////// Anomaly specifics
@@ -14,6 +15,15 @@ public class Tools {
 	////// RoboCode specifics
 	public final static double BOT_WIDTH  = 36;
 	public final static double BOT_HEIGHT = BOT_WIDTH;
+
+	public static void setBotBox(final Rectangle2D box, final Point2D pt) {
+		// right out of RobotPeer
+		box.setRect(
+			pt.getX() - Tools.BOT_WIDTH /2 + 2,
+			pt.getY() - Tools.BOT_HEIGHT/2 + 2,
+			Tools.BOT_WIDTH - 4,
+			Tools.BOT_HEIGHT - 4);
+	}
 
 	////// Java specifics
 	public static double toArcAngle(final double ang) {
