@@ -166,7 +166,7 @@ public final class Anomaly extends AdvancedRobot {
 				dude.guessedBBox.setRect(dude.boundingBox);
 			}
 
-			if (PAINT_ENEMIES && !dude.old) {
+			if (DRAW_ENEMIES && !dude.old) {
 				final Graphics2D g = super.getGraphics();
 
 				g.setColor(Color.GRAY);
@@ -304,6 +304,5 @@ public final class Anomaly extends AdvancedRobot {
 		if (propulsion != null) propulsion.onPaint(g);
 	}
 
-	private static final boolean
-		PAINT_ENEMIES = true;
+	private static final boolean DRAW_ENEMIES = true;
 }

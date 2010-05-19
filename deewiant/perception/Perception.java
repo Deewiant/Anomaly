@@ -287,7 +287,7 @@ public final class Perception {
 			arc.setAngleStart (Tools.toArcAngle(absBearings.get(maxStart)));
 			arc.setAngleExtent(Tools.toDeg(arcExtent));
 
-			if (PAINT_ENEMY_ARC) {
+			if (DRAW_ENEMY_ARC) {
 				Graphics2D g = Global.bot.getGraphics();
 				g.setColor(Color.CYAN);
 				g.draw(arc);
@@ -342,7 +342,7 @@ public final class Perception {
 			arc.setAngleStart (Tools.toArcAngle(ccw  -   EXTRATURN));
 			arc.setAngleExtent(Tools.toDeg(arcExtent + 2*EXTRATURN));
 
-			if (PAINT_EDGE_ARCS) {
+			if (DRAW_EDGE_ARCS) {
 				Graphics2D g = Global.bot.getGraphics();
 				g.setColor(Color.MAGENTA);
 				g.draw(arc);
@@ -516,17 +516,17 @@ public final class Perception {
 	//
 
 	public void onPaint(final Graphics2D g) {
-		if (!PAINT_QUADRANTS)
+		if (!DRAW_QUADRANTS)
 			return;
 
 		int q = 0, tq = 0;
 		g.setColor(Color.WHITE);
 		for (final Rectangle2D quad: quadrants) {
-			if (PAINT_QUADRANTS)
+			if (DRAW_QUADRANTS)
 				g.draw(quad);
 			if (quad.contains(Global.bot.getX(), Global.bot.getY())) {
 				tq = q;
-				if (!PAINT_QUADRANTS)
+				if (!DRAW_QUADRANTS)
 					break;
 			}
 			if (++q == 1)
@@ -537,7 +537,7 @@ public final class Perception {
 	}
 
 	private static final boolean
-		PAINT_QUADRANTS = false,
-		PAINT_EDGE_ARCS = true,
-		PAINT_ENEMY_ARC = true;
+		DRAW_QUADRANTS = false,
+		DRAW_EDGE_ARCS = false,
+		DRAW_ENEMY_ARC = false;
 }
