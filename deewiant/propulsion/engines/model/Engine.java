@@ -18,37 +18,59 @@ public abstract class Engine {
 
 	public abstract void move();
 
-	// TODO?
 	public void onScannedRobot(final Enemy dude) {}
 
 	protected final void goTo(final Point2D destination) {
-		final Point2D botPos = new Point2D.Double(Global.bot.getX(), Global.bot.getY());
 
-		double distance = botPos.distance(destination);
-		double turn = Tools.atan2(destination, botPos) - Global.bot.getHeadingRadians();
+		double distance = Global.me.distance(destination);
 
-		// woo, BackAsFront
-		if (Math.cos(turn) < 0) {
-			turn += Math.PI;
-			distance = -distance;
-		}
+		if (turnToward(destination))
+			distance *= -1;
 
 		// don't hit the wall while turning
 
-		final Point2D currentPath = Tools.projectVector(botPos, Global.bot.getHeadingRadians(), Tools.between(distance, -20, 20));
+		final Point2D currentPath =
+			Tools.projectVector(
+				Global.me,
+				Global.bot.getHeadingRadians(),
+				Tools.between(distance, -20, 20));
 
 		if (
-			(
+			Math.abs(Global.bot.getTurnRemainingRadians()) > 0 && (
 				currentPath.getX() < Tools.BOT_WIDTH *1.5 || currentPath.getX() > Global.mapWidth  - Tools.BOT_WIDTH *1.5 ||
 				currentPath.getY() < Tools.BOT_HEIGHT*1.5 || currentPath.getY() > Global.mapHeight - Tools.BOT_HEIGHT*1.5
-			) &&
-			Math.abs(Global.bot.getTurnRemainingRadians()) > 0
+			)
 		)
 			distance = 0;
 
-		turn = Utils.normalRelativeAngle(turn);
-
-		Global.bot.setTurnRightRadians(turn);
 		Global.bot.setAhead(distance);
+
+		// cheers to AaronR
+		Global.bot.setMaxVelocity(
+			(240/Math.PI) * (
+				(Math.PI/18) -
+			 	Math.min(
+			 		Math.abs(Global.bot.getTurnRemainingRadians()),
+			 		Math.PI/18)));
+	}
+
+	protected final boolean turnToward(final Point2D pt) {
+		return turnToward(Utils.normalAbsoluteAngle(Tools.atan2(pt, Global.me)));
+	}
+
+	// true if BackAsFront, i.e. the argument to setAhead should be negated
+	protected final boolean turnToward(final double absoluteAngle) {
+
+		boolean res = false;
+		double turn = absoluteAngle - Global.bot.getHeadingRadians();
+
+		if (Math.cos(turn) < 0) {
+			turn += Math.PI;
+			res = true;
+		}
+		turn = Utils.normalRelativeAngle(turn);
+		Global.bot.setTurnRightRadians(turn);
+
+		return res;
 	}
 }
