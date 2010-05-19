@@ -276,15 +276,23 @@ public final class Anomaly extends AdvancedRobot {
 	public void onHitWall(final HitWallEvent e) { ++wallHits; }
 
 	private Color getColour(final double energy) {
-		// new = (old - oldMin) * (newMax - newMin) / (oldMax - oldMin) + newMin
-		// hue ranges from 0-360; saturation, luminance are 0-1
-
 		if (energy < 200.1)
-			// energy 0-200, hue 0-240, sat 1, lum 0.5
-			return Tools.HSLtoRGB(6f*(float)energy/5f, 1f, 0.5f);
+			return Tools.HSLtoRGB(
+				Tools.fromToRange(
+					0f, 200f,
+					0f, 240f,
+					(float)energy),
+				1f,
+				0.5f);
+
 		else if (energy < 250.1)
-			// energy 200-250, hue 240, sat 1, lum 0.5-1
-			return Tools.HSLtoRGB(240f, 1f, ((float)energy - 150f)/100f);
+			return Tools.HSLtoRGB(
+				240f,
+				1f,
+				Tools.fromToRange(
+					200f, 250f,
+					0.5f, 1f,
+					(float)energy));
 		else
 			return Color.WHITE;
 	}

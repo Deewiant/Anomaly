@@ -77,7 +77,25 @@ public class Tools {
 		return Math.abs(a) < .1;
 	}
 
+	// works fine even if min > max.
+	public static double fromToRange(
+		final double oldmin, final double oldmax,
+		final double newmin, final double newmax,
+		final double val
+	) {
+		return (val - oldmin) * (newmax - newmin) / (oldmax - oldmin) + newmin;
+	}
+	public static float fromToRange(
+		final float oldmin, final float oldmax,
+		final float newmin, final float newmax,
+		final float val
+	) {
+		return (val - oldmin) * (newmax - newmin) / (oldmax - oldmin) + newmin;
+	}
+
 	////// colours
+	// hue ranges from 0-360; saturation, luminance are 0-1
+	// Color takes only floats for some reason...
 	public static Color HSLtoRGB(final float h, final float s, final float l) {
 		if (s == 0)
 			return new Color(l, l, l);
