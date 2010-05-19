@@ -21,8 +21,6 @@ public abstract class Engine {
 	// TODO?
 	public void onScannedRobot(final Enemy dude) {}
 
-	public void onPaint(final Graphics2D g) {}
-
 	protected final void goTo(final Point2D destination) {
 		final Point2D botPos = new Point2D.Double(Global.bot.getX(), Global.bot.getY());
 

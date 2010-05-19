@@ -301,7 +301,6 @@ public final class Anomaly extends AdvancedRobot {
 
 	public void onPaint(final Graphics2D g) {
 		if (perception != null) perception.onPaint(g);
-		if (propulsion != null) propulsion.onPaint(g);
 	}
 
 	private static final boolean DRAW_ENEMIES = true;

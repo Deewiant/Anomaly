@@ -4,15 +4,16 @@ package deewiant.propulsion.engines;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
-import java.awt.Shape;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import robocode.Rules;
+import robocode.util.Utils;
 
 import deewiant.common.Enemy;
 import deewiant.common.Global;
@@ -32,136 +33,120 @@ public final class RiskMinimizer extends Engine {
 		}
 	}
 
+	private static boolean DRAW_POINTS = true;
 	private final List<Point2D> drawPoints;
 	private final List<Double>  drawRisks;
 
-	private final Point2D[] prevPoints = new Point2D[1];
+	private final Random random = new Random();
 
-	private Point2D current, next;
-	private double nextRisk;
+	private final Point2D[] prevPoints = new Point2D[2];
 
-	private double botNRG;
-
-	private void updateBot() {
-		current = new Point2D.Double(Global.bot.getX(), Global.bot.getY());
-		botNRG  = Global.bot.getEnergy();
-	}
+	private Point2D
+		prev = new Point2D.Double(),
+		next = new Point2D.Double();
+	private long choseAt = 0;
+	private boolean justStarted = true;
+	private double nextRisk = Double.POSITIVE_INFINITY;
 
 	private static final double
-		DIST_FACTOR   = 1.2*Rules.RADAR_SCAN_RADIUS*Rules.RADAR_SCAN_RADIUS,
-		TINY_DISTSQ   = Tools.BOT_WIDTH*Tools.BOT_HEIGHT,
-		SHORT_DIST    = 100,
-		MIDDLE_DIST   = 150,
-		LONG_DIST     = 250,
-		SHORT_DISTSQ  = SHORT_DIST*SHORT_DIST,
-		MIDDLE_DISTSQ = MIDDLE_DIST*MIDDLE_DIST,
-		LONG_DISTSQ   = LONG_DIST*LONG_DIST;
+		TINY_DISTSQ   = 50*50,
+		MINDIST       = 100,
+		MAXDIST       = 200;
 
 	public void move() {
 
-		if (next != null && current.distanceSq(next) < TINY_DISTSQ)
-			return;
+		final long now = Global.bot.getTime();
 
-		updateBot();
+		// If we haven't moved some distance yet and are moving, don't pick a new
+		// point.
+		// Move for at least two ticks between decisions.
+		if (!justStarted && (
+			(now > choseAt && now - choseAt <= 2) ||
+			(
+				Global.bot.getDistanceRemaining() > 0 &&
+				Global.me.distanceSq(prev) < TINY_DISTSQ
+			)
+		)) {
+			if (DRAW_POINTS && next != null) {
+				final Graphics2D g = Global.bot.getGraphics();
+				g.setColor(Color.GREEN);
+				drawPoint(g, next);
+			}
+
+			// XXX: we sometimes keep hitting this return statement whilst
+			// stopped, this is a workaround
+			super.goTo(next);
+
+			return;
+		}
+		justStarted = false;
 
 		for (int i = 0; i < prevPoints.length; ++i)
 		if (prevPoints[i] != null)
-			if (current.distanceSq(prevPoints[i]) > LONG_DISTSQ)
+			if (Global.me.distanceSq(prevPoints[i]) > MAXDIST*MAXDIST)
 				prevPoints[i] = null;
 
-		if (next == null) {
-			next = current;
-			nextRisk = Double.POSITIVE_INFINITY;
-		// try to move around a lot, don't stay in one place for long
-		} else if (next.distanceSq(current) < TINY_DISTSQ)
+		if (Global.me.distanceSq(next) < TINY_DISTSQ)
+			// Don't ever stop moving...
 			nextRisk = Double.POSITIVE_INFINITY;
 		else
 			// recalculate, situation may have changed
 			nextRisk = risk(next);
 
 		if (DRAW_POINTS) {
-			drawPoints.clear();
-			drawRisks.clear();
 			drawPoints.add(next);
 			drawRisks.add(nextRisk);
 		}
 
-		double distance = MIDDLE_DIST;
-		if (Global.target != null)
-			distance = Tools.between(
-				distance,
-				SHORT_DIST,
-				0.8 * current.distance(Global.target));
+		for (double angle = 0; angle < 2 * Math.PI; angle += 0.3) {
+			final double distance =
+				MINDIST + random.nextDouble()*(MAXDIST-MINDIST);
+			tryPoint(Tools.projectVector(Global.me, angle, distance), distance);
+		}
 
-		for (double angle = 0; angle < 2 * Math.PI; angle += 0.3)
-			tryPoint(Tools.projectVector(current, angle, distance), distance);
+		if (DRAW_POINTS) {
+			// {{{ draw 'em
+			double
+				minRisk = Double.POSITIVE_INFINITY,
+				maxRisk = Double.NEGATIVE_INFINITY;
 
-		if (distance == SHORT_DIST)
-		for (double angle = 0; angle < 2 * Math.PI; angle += Math.PI/4)
-			tryPoint(Tools.projectVector(current, angle, LONG_DIST), LONG_DIST);
+			for (final double r : drawRisks)
+			if (Math.abs(r) != Double.POSITIVE_INFINITY) {
+					if (r < minRisk) minRisk = r;
+					if (r > maxRisk) maxRisk = r;
+			}
 
+			final Graphics2D g = Global.bot.getGraphics();
+
+			for (int i = 0; i < drawPoints.size(); ++i)
+				drawPoint(g,
+					drawPoints.get(i),
+					drawRisks.get(i), minRisk, maxRisk);
+
+			g.setColor(Color.GRAY);
+
+			for (final Point2D p : prevPoints)
+			if (p != null)
+				drawPoint(g, p);
+
+			drawPoints.clear();
+			drawRisks .clear();
+			// }}}
+		}
+
+		prev.setLocation(Global.me.getX(), Global.me.getY());
+		choseAt = now;
 		super.goTo(next);
 	}
 
-	private void tryPoint(final Point2D point, final double dist) {
-		if (
-			point.getX() < Tools.BOT_WIDTH  ||
-			point.getX() > Global.mapWidth  - Tools.BOT_WIDTH ||
-			point.getY() < Tools.BOT_HEIGHT ||
-			point.getY() > Global.mapHeight - Tools.BOT_HEIGHT
-		)
-			return;
-
-		final double risk = risk(point, dist);
-
-		if (DRAW_POINTS) {
-			drawPoints.add(point);
-			drawRisks.add(risk);
-		}
-
-		if (risk < nextRisk) {
-			addPrev(current);
-			next = point;
-			nextRisk = risk;
-		}
-	}
-
-	private void addPrev(final Point2D p) {
-		if (prevPoints.length == 1) {
-			prevPoints[0] = p;
-			return;
-		}
-
-		double maxDist = Double.NEGATIVE_INFINITY;
-		int m = prevPoints.length, n = m;
-
-		for (int i = 0; i < prevPoints.length; ++i)
-		if (prevPoints[i] == null)
-			n = i;
-		else {
-			final double dist = prevPoints[i].distanceSq(current);
-			if (dist < TINY_DISTSQ)
-				return;
-			else if (dist > maxDist) {
-				maxDist = dist;
-				m = i;
-			}
-		}
-
-		if (n < prevPoints.length)
-			prevPoints[n] = p;
-		else
-			prevPoints[m] = p;
-	}
-
 	private double risk(final Point2D point) {
-		return risk(point, current.distanceSq(point));
+		return risk(point, Global.me.distanceSq(point));
 	}
 	private double risk(final Point2D point, final double distSq) {
 
-		double fullRisk = 0;
+		double fullRisk = 1;
 
-		final Line2D lineToPoint = new Line2D.Double(current, point);
+		final Line2D lineToPoint = new Line2D.Double(Global.me, point);
 
 		final long expectedTime = (long)(Math.sqrt(distSq)/Rules.MAX_VELOCITY);
 
@@ -204,30 +189,46 @@ public final class RiskMinimizer extends Engine {
 					++targetedLikelihood;
 			}
 
-			double targetProb;
+			final double targetProb;
 			if (count > 0)
 				targetProb = (double)targetedLikelihood / count;
 			else
 				targetProb = 0;
 
 			double risk =
-				Math.min(dude.energy / botNRG, 1) *
+				Math.max(dude.energy / Global.bot.getEnergy(), 1) *
 				(1 + 0.5*linearity(point, dude.guessPosition(expectedTime))) *
 				(1 +     linearity(point, dude)) *
 				(1 + targetProb) *
-				DIST_FACTOR / dudeDistSq;
+				distanceSqRisk(dudeDistSq);
 
-			if (lineToPoint.intersects(dude.vicinity))
-				risk *= 20;
+			if (lineToPoint.intersects(dude.vicinity)) {
+				if (lineToPoint.intersects(dude.boundingBox))
+					return Double.POSITIVE_INFINITY;
+				risk *= 100;
+			}
 
 			fullRisk += risk;
 		}
 
    	for (final Point2D p : prevPoints)
-   	if (p != null)
-   		fullRisk += DIST_FACTOR / (10 * p.distanceSq(point));
+   		if (p != null)
+   			fullRisk += distanceSqRisk(p.distanceSq(point));
 
-		fullRisk += DIST_FACTOR / distSq;
+   	fullRisk += distanceSqRisk(distSq);
+
+//		double turn =
+//			Utils.normalRelativeAngle(
+//				Tools.atan2(point, Global.me) - Global.bot.getHeadingRadians());
+//		if (Math.abs(turn) > Math.PI/2) {
+//			if (turn > 0)
+//				turn -= Math.PI;
+//			else
+//				turn += Math.PI;
+//		}
+//		turn = Math.abs(turn);
+//
+//   	fullRisk *= 1 - turn/Math.PI;
 
 		return fullRisk;
 	}
@@ -237,39 +238,87 @@ public final class RiskMinimizer extends Engine {
 	//    0 if we'd be moving perpendicular to b
 	// I prefer "linearity", perpendicularity would be the other way around
 	private double linearity(final Point2D a, final Point2D b) {
-		return Math.abs(Math.cos(Tools.atan2(current, a) - Tools.atan2(current, b)));
+		return Math.abs(
+			Math.cos(Tools.atan2(Global.me, a) - Tools.atan2(Global.me, b)));
 	}
 
-	public void onPaint(final Graphics2D g) {
-		if (!DRAW_POINTS)
+	// Risk 10 at distance <= 50, 1 at >= 400
+	private double distanceSqRisk(final double distSq) {
+		return Tools.fromToRange(
+			50*50, 400*400,
+			10, 1,
+			Tools.between(50*50, 400*400, distSq));
+	}
+
+	private void tryPoint(final Point2D point, final double dist) {
+		if (
+			point.getX() < Tools.BOT_WIDTH  ||
+			point.getX() > Global.mapWidth  - Tools.BOT_WIDTH ||
+			point.getY() < Tools.BOT_HEIGHT ||
+			point.getY() > Global.mapHeight - Tools.BOT_HEIGHT
+		)
 			return;
 
-		for (int i = 0; i < drawPoints.size(); ++i) {
-			final Point2D p = drawPoints.get(i);
-			final double  r = Math.min(drawRisks.get(i)/100, 30*Global.bot.getOthers());
+		final double risk = risk(point, dist);
 
-			g.setColor(Tools.HSLtoRGB(
-				120 - 4*(float)r / Global.bot.getOthers(),
-				1f, 0.5f));
-
-			if (p == next)
-				g.draw(new Line2D.Double(current, p));
-
-			final Ellipse2D e = new Ellipse2D.Double(
-				p.getX() - 6, p.getY() - 6,
-				12, 12);
-
-			g.draw(e);
+		if (DRAW_POINTS) {
+			drawPoints.add(point);
+			drawRisks.add(risk);
 		}
 
-		g.setColor(Color.GRAY);
-
-		for (final Point2D p : prevPoints)
-		if (p != null)
-			g.draw(new Ellipse2D.Double(
-				p.getX() - 6, p.getY() - 6,
-				12, 12));
+		if (risk < nextRisk) {
+			addPrev(Global.me);
+			next = point;
+			nextRisk = risk;
+		}
 	}
 
-	private static boolean DRAW_POINTS = true;
+	// Replace the prevPoint that is furthest away
+	// If any prevPoint is our current position, don't place this one at all
+	private void addPrev(final Point2D p) {
+		if (prevPoints.length == 1) {
+			prevPoints[0] = p;
+			return;
+		}
+
+		double maxDist = Double.NEGATIVE_INFINITY;
+		int m = prevPoints.length, n = m;
+
+		for (int i = 0; i < prevPoints.length; ++i)
+		if (prevPoints[i] == null)
+			n = i;
+		else if (prevPoints[i] == Global.me)
+			return;
+		else {
+			final double dist = prevPoints[i].distanceSq(Global.me);
+			if (dist > maxDist) {
+				maxDist = dist;
+				m = i;
+			}
+		}
+
+		if (n < prevPoints.length)
+			prevPoints[n] = p;
+		else
+			prevPoints[m] = p;
+	}
+
+	private void drawPoint(
+		final Graphics2D g, final Point2D p,
+		final double r, final double minR, final double maxR
+	) {
+		// green is at around 96, 1, 0.5
+		// with red at         0, 1, 0.5
+		g.setColor(Tools.HSLtoRGB(
+			(float)(96 - Tools.fromToRange(minR, maxR, 0, 96, r)),
+			1f, 0.5f));
+		drawPoint(g, p);
+	}
+
+	private void drawPoint(final Graphics2D g, final Point2D p) {
+		if (p == next)
+			g.draw(new Line2D.Double(Global.me, p));
+
+		g.draw(new Ellipse2D.Double(p.getX() - 6, p.getY() - 6, 12, 12));
+	}
 }

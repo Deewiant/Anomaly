@@ -47,10 +47,6 @@ public final class Propulsion {
 		engine.onScannedRobot(dude);
 	}
 
-	public void onPaint(final Graphics2D g) {
-		if (engine != null) engine.onPaint(g);
-	}
-
 	private void setEngine(final Engine e) {
 		if (e != engine) {
 			Global.out.printf("Engine set to: %s\n", e.name);
