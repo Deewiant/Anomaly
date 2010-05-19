@@ -80,6 +80,7 @@ public final class Anomaly extends AdvancedRobot {
 	}
 	private void gameOver() {
 		newTarget(null);
+		propulsion.gameOver();
 		ammunition.spewTheStats();
 		if (wallHits > 0)
 			Global.out.println(wallHits + " wall hits");

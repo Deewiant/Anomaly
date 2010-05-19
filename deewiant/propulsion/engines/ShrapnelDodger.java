@@ -65,6 +65,8 @@ public final class ShrapnelDodger extends Engine {
 	}
 	private static final BulletAvoider bulletAvoider = new BulletAvoider();
 
+	public void gameOver() { bullets.clear(); }
+
 	public void move() {
 
 		// avoid bullets

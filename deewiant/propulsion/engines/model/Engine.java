@@ -21,6 +21,8 @@ public abstract class Engine {
 	public void onScannedRobot(final Enemy dude) {}
 	public void onFired       (final Enemy dude) {}
 
+	public void gameOver() {}
+
 	protected final void goTo(final Point2D destination) {
 
 		double distance = Global.me.distance(destination);

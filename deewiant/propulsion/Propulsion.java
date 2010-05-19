@@ -54,6 +54,9 @@ public final class Propulsion {
 	public void onFired(final Enemy dude) {
 		if (engine != null) engine.onFired(dude);
 	}
+	public void gameOver() {
+		if (engine != null) engine.gameOver();
+	}
 
 	private void setEngine(final Engine e) {
 		if (e != engine) {

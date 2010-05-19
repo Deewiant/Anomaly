@@ -53,6 +53,8 @@ public final class VirtualBullets {
 
 	public void add(final VirtualBullet b) { bullets.add(b); }
 
+	public void clear() { bullets.clear(); }
+
 	public void handleLiveOnes(final VirtualBulletHandler handler) {
 		if (bullets.isEmpty())
 			return;
