@@ -60,8 +60,13 @@ public final class Propulsion {
 
 	// Is it Rammer time?
 	private boolean rammerTime() {
-		final long   now = Global.bot.getTime();
 		final double nrg = Global.bot.getEnergy();
+
+		// Don't kill yourself...
+		if (nrg <= Rules.ROBOT_HIT_DAMAGE)
+			return false;
+
+		final long now = Global.bot.getTime();
 
 		for (final Enemy dude : Global.dudes) if (!dude.dead)
 		if (!(
