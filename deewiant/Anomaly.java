@@ -117,7 +117,10 @@ public final class Anomaly extends AdvancedRobot {
 		if (dude.velocity == 0 && prevSpeed > 2.0)
 			wallDamage = Math.max(0, prevSpeed / 2 - 1);
 
-		final double deltaEnergy = dude.prevEnergy - dude.energy - wallDamage;
+		double deltaEnergy = dude.prevEnergy - dude.energy - wallDamage;
+		if (dude.justHit)
+			deltaEnergy -= dude.myLastHit;
+
 		dude.firePower =
 			deltaEnergy >= 0.1 && deltaEnergy <= 3.0
 				? deltaEnergy
@@ -152,7 +155,7 @@ public final class Anomaly extends AdvancedRobot {
 
 			final long timediff = now - dude.scanTime;
 			if (timediff > 0) {
-				dude.justSeen = false;
+				dude.justSeen = dude.justHit = false;
 
 				if (timediff > 360 / Rules.RADAR_TURN_RATE)
 					dude.old = dude.positionUnknown = true;
@@ -228,7 +231,7 @@ public final class Anomaly extends AdvancedRobot {
 				newTarget(null);
 
 			dude.dead = dude.positionUnknown = dude.old = true;
-			dude.justSeen = false;
+			dude.justSeen = dude.justHit = false;
 		}
 	}
 
@@ -237,7 +240,9 @@ public final class Anomaly extends AdvancedRobot {
 
 		final Enemy dude = getDude(e.getName());
 
-		dude.energy = e.getEnergy();
+		dude.energy    = e.getEnergy();
+		dude.justHit   = true;
+		dude.myLastHit = Rules.getBulletDamage(e.getBullet().getPower());
 		++dude.hitCount;
 	}
 

@@ -26,7 +26,8 @@ public final class Enemy extends Point2D.Double {
 		firePower,
 		heading,    // angle enemy is moving in, [0,2π)
 		velocity,
-		hurtMe;
+		hurtMe,
+		myLastHit; // amount of damage we did to it on last shot
 	public long
 		scanTime,
 		lastShootTime, // guess
@@ -38,7 +39,8 @@ public final class Enemy extends Point2D.Double {
 		dead,
 		justSeen,
 		old,
-		positionUnknown;
+		positionUnknown,
+		justHit;
 
 	public Rectangle2D
 		boundingBox = new Rectangle2D.Double(),
