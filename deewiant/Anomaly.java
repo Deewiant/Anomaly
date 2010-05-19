@@ -246,10 +246,7 @@ public final class Anomaly extends AdvancedRobot {
 
 		++dude.hitMeCount;
 
-		final double power = e.getPower();
-		double damage = 4 * power;
-		if (power > 1)
-			damage += 2 * (power-1);
+		final double damage = Rules.getBulletDamage(e.getPower());
 
 		dude.hurtMe        += damage;
 		Global.damageTaken += damage;
