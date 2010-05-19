@@ -16,8 +16,7 @@ import deewiant.ammunition.guns.model.Gun;
 import deewiant.common.Enemy;
 import deewiant.common.Global;
 import deewiant.common.Tools;
-import static deewiant.common.Enemy.VirtualBullet;
-import static deewiant.common.Enemy.VirtualGun;
+import deewiant.common.VirtualBullets;
 
 public final class Ammunition {
 
@@ -34,14 +33,13 @@ public final class Ammunition {
 
 
 	public void newEnemy(final Enemy dude) {
-		dude.virtualGuns = new VirtualGun[guns.length];
+		dude.virtualGuns = new Enemy.VirtualGun[guns.length];
 
 		for (int i = 0; i < guns.length; ++i) {
 			guns[i].newEnemy(dude);
-			dude.virtualGuns[i] = new VirtualGun();
+			dude.virtualGuns[i]         = dude.new VirtualGun();
 			dude.virtualGuns[i].gun     = guns[i];
-			dude.virtualGuns[i].bullets =
-				new ArrayDeque<VirtualBullet>(guns.length * 8);
+			dude.virtualGuns[i].bullets = new VirtualBullets();
 		}
 	}
 
@@ -79,7 +77,7 @@ public final class Ammunition {
 
 			for (final Enemy dude : Global.dudes)
 			if (!dude.positionUnknown)
-			for (final VirtualGun vg : dude.virtualGuns)
+			for (final Enemy.VirtualGun vg : dude.virtualGuns)
 			if (vg.gun != gun)
 				vg.bullets.add(vg.gun.fireVirtual(dude));
 
@@ -164,64 +162,9 @@ public final class Ammunition {
 	}
 
 	private void updateVirtuals() {
-		for (Enemy dude : Global.dudes)
+		for (final Enemy dude : Global.dudes)
 		if (!dude.dead)
-		for (VirtualGun vgun : dude.virtualGuns) {
-
-			if (vgun.bullets.size() == 0)
-				continue;
-
-			int removableBottom = -1, removableTop = -1;
-			boolean irremovableBottom = false, irremovableTop = true;
-
-			int i = 0;
-			for (VirtualBullet bul : vgun.bullets) {
-
-				boolean removable = false;
-				if (
-					bul.alive  &&
-					bul.x >= 0 && bul.x <= Global.mapWidth &&
-					bul.y >= 0 && bul.y <= Global.mapHeight
-				) {
-					bul.move();
-					if (dude.boundingBox.intersectsLine(bul.line)) {
-						vgun.gun.virtualHit(dude);
-						removable = true;
-					} else {
-						irremovableBottom = true;
-						irremovableTop    = true;
-					}
-				} else
-					removable = true;
-
-				if (removable) {
-					bul.alive = false;
-					if (!irremovableBottom)
-						removableBottom = i;
-
-					if (irremovableTop) {
-						removableTop = i;
-						irremovableTop = false;
-					}
-				}
-				++i;
-			}
-
-			// remove as many as possible from bottom and top of deque
-
-			if (removableBottom == vgun.bullets.size()-1) {
-				vgun.bullets.clear();
-				continue;
-			}
-			while (removableBottom-- >= 0)
-				vgun.bullets.removeFirst();
-
-			if (!irremovableTop) {
-				removableTop = vgun.bullets.size() - removableTop;
-				while (removableTop-- >= 0)
-					vgun.bullets.removeLast();
-			}
-
-		}
+		for (final Enemy.VirtualGun vgun : dude.virtualGuns)
+			vgun.bullets.handleLiveOnes(vgun);
 	}
 }

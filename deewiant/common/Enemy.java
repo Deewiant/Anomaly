@@ -5,11 +5,12 @@ package deewiant.common;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
-import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
 
 import deewiant.ammunition.guns.model.Gun;
+import static deewiant.common.VirtualBullets.VirtualBullet;
+import static deewiant.common.VirtualBullets.VirtualBulletHandler;
 
 // kudos to Kawigi for Point2D inheritance idea
 public final class Enemy extends Point2D.Double {
@@ -59,25 +60,17 @@ public final class Enemy extends Point2D.Double {
 	////////////////////////////////////////////////////////////////////////////
 	// accuracy info for Ammunition, remembered across rounds
 
-	public static final class VirtualBullet {
-		public double x, y, prevX, prevY, dx, dy;
-		public boolean alive;
-		public Line2D line;
-
-		public void move() {
-			prevX = x;
-			prevY = y;
-
-			x += dx;
-			y += dy;
-
-			line.setLine(prevX, prevY, x, y);
-		}
-	}
-
-	public static final class VirtualGun {
+	public final class VirtualGun implements VirtualBulletHandler {
 		public Gun gun;
-		public ArrayDeque<VirtualBullet> bullets;
+		public VirtualBullets bullets;
+
+		public boolean dealWith(final VirtualBullet bul) {
+			if (Enemy.this.boundingBox.intersectsLine(bul.line)) {
+				gun.virtualHit(Enemy.this);
+				return true;
+			} else
+				return false;
+		}
 	}
 
 	public VirtualGun[] virtualGuns;

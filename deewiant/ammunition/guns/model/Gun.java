@@ -9,7 +9,6 @@
 
 package deewiant.ammunition.guns.model;
 
-import java.awt.geom.Line2D;
 import java.util.ArrayList;
 import java.util.Formatter;
 import java.util.HashMap;
@@ -23,7 +22,7 @@ import robocode.util.Utils;
 import deewiant.common.Enemy;
 import deewiant.common.Global;
 import deewiant.common.Tools;
-import static deewiant.common.Enemy.VirtualBullet;
+import static deewiant.common.VirtualBullets.VirtualBullet;
 
 public abstract class Gun {
 	// assume no more than 2^31-1 shots...
@@ -184,23 +183,14 @@ public abstract class Gun {
 	}
 
 	public final VirtualBullet fireVirtual(final Enemy dude) {
-		final VirtualBullet vb = new VirtualBullet();
-
-		final double speed   = Rules.getBulletSpeed(chooseFirePower(dude));
-		final double heading = setSights(dude, speed);
-
-		vb.dx = speed * Math.sin(heading);
-		vb.dy = speed * Math.cos(heading);
-
-		vb.x = vb.prevX = Global.me.getX();
-		vb.y = vb.prevY = Global.me.getY();
-
-		vb.line = new Line2D.Double();
-		vb.alive = true;
-
 		++vacc.get(dude.id).shots;
 
-		return vb;
+		final double fp = chooseFirePower(dude);
+
+		return new VirtualBullet(
+			Global.me, fp,
+			setSights(dude, Rules.getBulletSpeed(fp))
+		);
 	}
 
 	public final double totalAccuracy(final Enemy dude) {
