@@ -44,6 +44,8 @@ public class Tools {
 	}
 
 	public static double atan2(final Point2D b, final Point2D a) {
+		// Yes the x,y argument order is correct: it effectively puts zero north
+		// and makes it increase clockwise
 		return Math.atan2(b.getX() - a.getX(), b.getY() - a.getY());
 	}
 
