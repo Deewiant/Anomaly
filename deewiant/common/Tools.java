@@ -49,6 +49,11 @@ public class Tools {
 		return Math.atan2(b.getX() - a.getX(), b.getY() - a.getY());
 	}
 
+	public static double absAngleInDirection(final Point2D v) {
+		// Ditto atan2
+		return Utils.normalAbsoluteAngle(Math.atan2(v.getX(), v.getY()));
+	}
+
 	public static double currentAbsBearing(final Point2D a, final Point2D me) {
 		return Utils.normalAbsoluteAngle(atan2(a, me));
 	}

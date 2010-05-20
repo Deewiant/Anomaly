@@ -107,14 +107,19 @@ Global.out.printf("%s: (%f, %f) (strength %f)\n", dude.name, Math.sin(bearing)*f
 		if (northDist < wh) { Global.out.printf("North wall: (0, %f) (dist %f)\n",  WALL_FORCE / northDist, northDist); fy += WALL_FORCE / northDist; }
 		if (southDist < wh) { Global.out.printf("South wall: (0, %f) (dist %f)\n", -WALL_FORCE / southDist, southDist); fy -= WALL_FORCE / southDist; }
 
+		final double angle = Tools.absAngleInDirection(new Point2D.Double(fx, fy));
+
 Global.out.printf("Total: (%f, %f)\n", fx, fy);
-Global.out.printf("Turning toward: %f\n", Math.toDegrees(Math.atan2(fy, fx)));
+Global.out.printf("Turning toward: %f and going ", Math.toDegrees(angle));
 
 		final double ahead;
-		if (turnToward(Tools.atan2(new Point2D.Double(fx, fy), Global.me)))
+		if (turnToward(angle)) {
 			ahead = Double.NEGATIVE_INFINITY;
-		else
+Global.out.printf("BACKWARD\n");
+		} else {
 			ahead = Double.POSITIVE_INFINITY;
+Global.out.printf("FORWARD\n");
+		}
 
 		Global.bot.setAhead(ahead);
 		Global.bot.setMaxVelocity(Double.POSITIVE_INFINITY);
@@ -124,11 +129,7 @@ Global.out.printf("Turning toward: %f\n", Math.toDegrees(Math.atan2(fy, fx)));
 			g.setColor(Color.PINK);
 
 			g.draw(new Line2D.Double(
-				Global.me,
-				Tools.projectVector(
-					Global.me,
-					Tools.atan2(new Point2D.Double(fx, fy), Global.me),
-					100)));
+				Global.me, Tools.projectVector(Global.me, angle, 100)));
 		}
 	}
 
